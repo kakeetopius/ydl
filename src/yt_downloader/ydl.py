@@ -20,11 +20,6 @@ TEMP_PATH  = tempfile.gettempdir()
 def main():
     options = get_args()
 
-    api_key = os.getenv("yt_api")
-    if not api_key:
-        raise RuntimeError("HOME environment variable is not set") 
-        exit(-1)
-
     home = os.getenv("HOME")
     if not home:
         raise RuntimeError("HOME environment variable is not set") 
@@ -37,6 +32,10 @@ def main():
     MUSIC_PATH = HOME / "Music"
 
     if options.search:
+        api_key = os.getenv("yt_api")
+        if not api_key:
+            raise RuntimeError("yt_api environment variable is not set. please set before continuing") 
+            exit(-1)
         results = get_yt_results(options.search, api_key)
         urls = show_and_get_url(results["items"])
     elif options.link:
@@ -44,6 +43,10 @@ def main():
     elif options.batch_file:
         urls = get_urls(options.batch_file)
     elif options.kwfile:
+        api_key = os.getenv("yt_api")
+        if not api_key:
+            raise RuntimeError("yt_api environment variable is not set. please set before continuing") 
+            exit(-1)
         urls = search_urls(options.kwfile, api_key)
     else:
         print("Invalid Usage")
