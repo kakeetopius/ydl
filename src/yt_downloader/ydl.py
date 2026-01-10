@@ -18,6 +18,14 @@ MUSIC_PATH : pathlib.Path
 TEMP_PATH  = tempfile.gettempdir()
 
 def main():
+    try:
+        start()
+    except KeyboardInterrupt:
+        print("\nInterrupted by user. Quiting.............")
+    except Exception as e:
+        print(e)
+
+def start():
     options = get_args()
 
     home = os.getenv("HOME")
@@ -457,13 +465,3 @@ def truncate(text):
     The shortened string
     """
     return text[:PRINT_MAX_LEN] + "..."
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\nInterrupted by user. Quiting.............")
-    except Exception as e:
-        print(e)
-
