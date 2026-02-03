@@ -130,7 +130,6 @@ def get_urls(file_path: str) -> list:
     try:
         with open(file_path, "r") as file:
             for line in file:
-                line.strip()
                 stripped = line.strip()
                 if not stripped:
                     continue
