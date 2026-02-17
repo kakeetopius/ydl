@@ -11,11 +11,9 @@ API_EP = "https://youtube.googleapis.com/youtube/v3/search"
 YT_BASEURL = "https://www.youtube.com/watch?v="
 
 PRINT_MAX_LEN = 70
-MAX_RESULT = 5
 
 VIDEO_PATH : pathlib.Path
 MUSIC_PATH : pathlib.Path
-TEMP_PATH  = tempfile.gettempdir()
 
 def main():
     try:
@@ -44,7 +42,7 @@ def start():
         if not api_key:
             raise RuntimeError("yt_api environment variable is not set. please set before continuing") 
             exit(-1)
-        results = get_yt_results(options.search, api_key)
+        results = get_yt_results(options.search,options.num_results,  api_key)
         urls = show_and_get_url(results["items"])
     elif options.link:
         urls = options.link
@@ -76,7 +74,7 @@ def get_args():
     4. -b batch file containing urls
     5. -p Download playlist also
     """
-    description = "A python script to search youtube for any video with keywords and then download audio or video."
+    description="A python script to search youtube for any video with keywords and then download audio or video."
 
     argparser = argparse.ArgumentParser(description=description)
     argparser.add_argument(
@@ -103,6 +101,16 @@ def get_args():
         help="Path to a file with youtube urls. One per line",
         dest="batch_file",
     )
+
+    argparser.add_argument(
+            "-n",
+            "--num-results",
+            type = str,
+            help="The number of results to retrieve for each video if keywords are used to search.",
+            dest="num_results",
+            default=5
+    )
+
     argparser.add_argument(
         "-p",
         "--playlist",
@@ -142,7 +150,7 @@ def get_urls(file_path: str) -> list:
     return urls
 
 
-def get_yt_results(search_str: str, api_key: str) -> dict:
+def get_yt_results(search_str: str, num_results: int, api_key: str) -> dict:
     """
     Use: Function is used to query youtube for search results of given keywords.
 
@@ -159,7 +167,7 @@ def get_yt_results(search_str: str, api_key: str) -> dict:
 
     query_params = {
         "part": "snippet",
-        "maxResults": MAX_RESULT,
+        "maxResults": num_results,
         "type": "video",
         "q": search_str,
         "key": api_key,
@@ -294,8 +302,9 @@ def show_and_get_url(results: dict) -> str:
 
     mess1 = "Enter Index of Video to download"
     mess2 = "Enter Correct Index"
+    max_input = len(results)
 
-    num = get_num_input(mess1, mess2, 1, MAX_RESULT, False)
+    num = get_num_input(mess1, mess2, 1, max_input, False)
 
     return YT_BASEURL + get_video_id(results, num)
 
@@ -308,6 +317,8 @@ def download_content(urls: list[str] | str, dl_playlist: bool):
     urls: A list of one or more urls to youtube videos for downloading
     dl_playlist: Indicate whether to download playlist if link supports it True if yes no otherwise.
     """
+    TEMP_PATH  = tempfile.gettempdir()
+
     print("\nContent Types:\n1.Audio\n2.Video\n3.Both Audio and Video")
     mess1 = "Enter the Content Type to download"
     mess2 = "Enter 1 for Audio or 2 for Video"
