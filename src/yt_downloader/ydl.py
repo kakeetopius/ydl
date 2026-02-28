@@ -9,6 +9,9 @@ from InquirerPy import inquirer
 from InquirerPy.validator import EmptyInputValidator, PathValidator
 
 
+#TODO:
+# Add flag to query yt-dlp for available formats for a video and then a flag to use a user provided format.
+
 API_EP = "https://youtube.googleapis.com/youtube/v3/search"
 YT_BASEURL = "https://www.youtube.com/watch?v="
 
@@ -16,14 +19,6 @@ PRINT_MAX_LEN = 70
 
 VIDEO_PATH : pathlib.Path
 MUSIC_PATH : pathlib.Path
-
-def main():
-    try:
-        start()
-    except KeyboardInterrupt:
-        print("\nInterrupted by user. Quiting.............")
-    except Exception as e:
-        print(e)
 
 def start():
     options = get_args()
