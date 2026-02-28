@@ -5,6 +5,8 @@ import argparse
 import prettytable
 import os
 import pathlib
+from InquirerPy import inquirer
+from InquirerPy.validator import EmptyInputValidator, PathValidator
 
 
 API_EP = "https://youtube.googleapis.com/youtube/v3/search"
@@ -63,7 +65,7 @@ def start():
 
 def get_args():
     """
-    Use: Function gets arguments from command line
+    Function get_args gets arguments from command line
 
     Returns the result as dictionary
 
@@ -106,7 +108,7 @@ def get_args():
             "-n",
             "--num-results",
             type = str,
-            help="The number of results to retrieve for each video if keywords are used to search.",
+            help="The number of results to retrieve for each video if keywords are used to search. (Default is 5)",
             dest="num_results",
             default=5
     )
@@ -126,7 +128,7 @@ def get_args():
 
 def get_urls(file_path: str) -> list:
     """
-    Use: Function gets urls from a batch file
+    Function get_urls gets urls from a batch file
 
     Paramaters:
         file_path: The path to the batch file
@@ -152,7 +154,7 @@ def get_urls(file_path: str) -> list:
 
 def get_yt_results(search_str: str, num_results: int, api_key: str) -> dict:
     """
-    Use: Function is used to query youtube for search results of given keywords.
+    Function get_yt_results is used to query youtube for search results of given keywords.
 
     Parameters:
     1.str: a string with key words
@@ -202,7 +204,7 @@ def get_yt_results(search_str: str, num_results: int, api_key: str) -> dict:
 
 def search_urls(file_path: str, api_key: str) -> list:
     """
-    Use: Function searches for urls of videos based on keywords in batch file
+    Function search_urls searches for urls of videos based on keywords in batch file
 
     Paramaters:
     1.file_path: Path to the batch file
@@ -269,9 +271,9 @@ def search_urls(file_path: str, api_key: str) -> list:
         exit(-1)
 
 
-def show_and_get_url(results: dict) -> str:
+def show_and_get_url(results: list) -> str:
     """
-    Use: Function prints out information using prettytable about the returned youtube resulted
+    Function show_and_get_url prints out information using prettytable about the returned youtube resulted
         and then queries the user which video to download
 
     Paramaters:
@@ -300,18 +302,20 @@ def show_and_get_url(results: dict) -> str:
 
     print(table)
 
-    mess1 = "Enter Index of Video to download"
+    mess1 = "Enter Index of Video to download:"
     mess2 = "Enter Correct Index"
     max_input = len(results)
 
     num = get_num_input(mess1, mess2, 1, max_input, False)
-
+    if not num:
+        return ""
+    
     return YT_BASEURL + get_video_id(results, num)
 
 
 def download_content(urls: list[str] | str, dl_playlist: bool):
     """
-    Use: Function downloads the youtube video pointed to by the urls given using yt_dlp module
+    Function download_content downloads the youtube video pointed to by the urls given using yt_dlp module
 
     Parameters:
     urls: A list of one or more urls to youtube videos for downloading
@@ -319,52 +323,40 @@ def download_content(urls: list[str] | str, dl_playlist: bool):
     """
     TEMP_PATH  = tempfile.gettempdir()
 
-    print("\nContent Types:\n1.Audio\n2.Video\n3.Both Audio and Video")
-    mess1 = "Enter the Content Type to download"
-    mess2 = "Enter 1 for Audio or 2 for Video"
-
-    content_type = get_num_input(mess1, mess2, 1, 3, False)
+    content_type = get_terminal_selection (
+            message = "Select Content Type to download:",
+        selections= ["Audio", "Video", "Both"],
+        default = None
+    )
     global MUSIC_PATH
     global VIDEO_PATH
     path: str = ""
-    format: str = ""
+    ytdlp_format: str = ""
 
-    if content_type == 1:
-        m_path = input("Enter music path(Leave blank for default): ")
+    if content_type == "Audio":
+        m_path = get_dir_path("Enter music path(Leave blank for default): ")
         if m_path:
             path = m_path
         else:
             path = str(MUSIC_PATH)
-        format = "bestaudio"
+        ytdlp_format = "bestaudio"
     else:
-        if content_type == 3:
-            m_path = input("Enter music path(Leave blank for default): ")
+        if content_type == "Both":
+            m_path = get_dir_path("Enter music path(Leave blank for default): ")
             if m_path:
                 MUSIC_PATH = pathlib.Path(m_path)
-                format = "bestaudio"
-        v_path = input("Enter video path(Leave blank for default): ")
+                ytdlp_format = "bestaudio"
+        v_path = get_dir_path("Enter video path(Leave blank for default): ")
         if v_path:
             VIDEO_PATH = pathlib.Path(v_path)
-        formats = ["1440", "1080", "720", "480", "2160", "4320"]
-        print(
-            "\nVideo Formats:\n1.1440p\n2.1080p\n3.720p\n4.480p.\n\nOthers(May be very large or not available at all):\n5.2160p\n6.4320p"
-        )
+        formats = [ "2160", "4320", "1440", "1080", "720", "480"]
 
-        mess1 = "Enter a Video format (1-6) to download(Press Enter for Default[720p])"
-        mess2 = "Enter number between 1-6 according to the given formats"
+        format = get_terminal_selection( "Choose format to download", formats, "720")
 
-        format_index = get_num_input(mess1, mess2, 1, 6, True)
-
-        if not format_index:
-            format = (
-                "bestaudio+bestvideo[ext=mp4][height<=720]/best[ext=mp4][height<=720]"
-            )
-        else:
-            vid_format = formats[format_index - 1]
-            format = f"bestaudio+bestvideo[ext=mp4][height<={vid_format}]/best[ext=m4a][height<={vid_format}]"
+        ytdlp_format = f"bestaudio+bestvideo[ext=mp4][height<={format}]/best[ext=m4a][height<={format}]"
 
         path = str(VIDEO_PATH)
-        print(f"Format to download: {format}")
+        print(f"Format to download: {ytdlp_format}")
 
     # -----------------------Options for yt-dlp------------------------------#
     format_sorts = ["ext"]
@@ -375,7 +367,7 @@ def download_content(urls: list[str] | str, dl_playlist: bool):
 
     ydl_opts: dict = {
         "quiet": False,
-        "format": format,
+        "format": ytdlp_format,
         "format_sort": format_sorts,
         "concurrent_fragment_downloads": 5,
         "outtmpl": output_format,
@@ -384,12 +376,13 @@ def download_content(urls: list[str] | str, dl_playlist: bool):
     }
     # ------------------------------------------------------------------------#
 
+    print("\n")
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download(urls)
             print(f"\nDownload(s) Successfull.\nSaved at: {path}\n")
 
-        if content_type == 3:  # if audio is also required
+        if content_type == "Both":  # if audio is also required
             ydl_opts["format"] = "bestaudio"
             ydl_opts["paths"]["home"] = str(MUSIC_PATH)
             path = str(MUSIC_PATH)
@@ -404,47 +397,9 @@ def download_content(urls: list[str] | str, dl_playlist: bool):
         print(f"Error: {e}")
 
 
-def get_num_input(message1: str, message2: str, min: int, max: int, allowDefault: bool):
+def get_video_id(results: list, index: int) -> str:
     """
-    Use: Function is used to get integer input from user
-
-    Parameters:
-    1.message1:     The Message shown to the user the very first time to ask for input
-    2.message2:     The Message shown to the user subsequent times if the input is invalid
-    3.min:          The lowest integer expected
-    4.max:          The highest integer expected
-    5.allowDefault: Indicates whether to try to force user to give valid Integer
-
-    Returns:
-    An integer between min and max inclusive if allowDefault is false
-    If allowDefault is true, returns False if at first attempt the user enters Invalid Input or Nothing at all.
-    Else returns an integer between min and max
-    """
-
-    try:
-        num = int(input(f"\n{message1}: "))
-    except ValueError:
-        num = None
-        if allowDefault:
-            return False
-
-    while num is None or num > max or num < min:
-        if num is None:
-            print("NOT A NUMBER")
-        else:
-            print("INVALID")
-
-        try:
-            num = int(input((f"{message2}: ")))
-        except ValueError:
-            num = None
-
-    return num
-
-
-def get_video_id(results: dict, index: int) -> str:
-    """
-    Use: Function returns the video id of the youtube video selected for downloading
+    Function get_video_id returns the video id of the youtube video selected for downloading
 
     Parameters:
     1.results: Is the result dict containing the info returend by youtube.
@@ -466,7 +421,7 @@ def get_video_id(results: dict, index: int) -> str:
 
 def truncate(text):
     """
-    Use: Function truncates text that is larger than PRINT_MAX_LEN
+    Function truncate truncates text that is larger than PRINT_MAX_LEN
 
     Parameters:
     1.text: The text to truncate
@@ -475,3 +430,48 @@ def truncate(text):
     The shortened string
     """
     return text[:PRINT_MAX_LEN] + "..."
+
+def get_num_input(message1: str, message2: str, min: int, max: int, allowEmpty: bool) -> int | None:
+    """
+    Function get_num_input is used to get integer input from user
+
+    Parameters:
+    1.message1:     The Message shown to the user the very first time to ask for input
+    2.message2:     The Message shown to the user subsequent times if the input is invalid
+    3.min:          The lowest integer expected
+    4.max:          The highest integer expected
+    5.allowEmpty:   Indicates whether to try to force user to give an input.
+
+    Returns:
+    An integer between min and max inclusive if allowEmpty is false
+    """
+    
+    value = inquirer.number(
+            message=message1,
+            invalid_message=message2,
+            min_allowed=min,
+            max_allowed=max,
+            mandatory=True,
+            validate=EmptyInputValidator() if not allowEmpty else None,
+    ).execute()
+    return int(value)
+
+def get_terminal_selection(message: str, selections: list[str], default) -> str:
+    return inquirer.select(
+        message = message,
+        choices = selections,
+        default = default,
+        mandatory = True,
+        vi_mode=True,
+    ).execute()
+
+def get_dir_path(message: str):
+    return inquirer.filepath(
+            message = message,
+            only_directories= True,
+            validate = PathValidator(is_dir=True),
+            mandatory = True,
+            vi_mode=True,
+    ).execute()
+
+
