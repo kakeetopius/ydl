@@ -43,7 +43,7 @@ def start():
         if not api_key:
             raise RuntimeError("yt_api environment variable is not set. please set before continuing") 
             exit(-1)
-        urls = query_youtube_from_file(options.kwfile, api_key)
+        urls = get_urls_from_keyword_file(options.kwfile, api_key)
     else:
         print("Invalid Usage")
         print("Use the -h option to get help")
@@ -178,7 +178,7 @@ def query_youtube(search_str: str, num_results: int, api_key: str) -> dict:
     }
 
     try:
-        print("Retrieving corresponding video urls................")
+        print("Retrieving video url(s) for: ", search_str)
         response = requests.get(
             url=API_EP, headers=headers, params=query_params, timeout=5
         )
@@ -204,9 +204,8 @@ def query_youtube(search_str: str, num_results: int, api_key: str) -> dict:
         exit(-1)
 
 
-def query_youtube_from_file(file_path: str, api_key: str) -> list[str]:
+def get_urls_from_keyword_file(file_path: str, api_key: str) -> list[str]:
     """
-    Function searches for urls of videos based on keywords in batch file
 
     Paramaters:
     1.file_path: Path to the batch file
@@ -215,10 +214,8 @@ def query_youtube_from_file(file_path: str, api_key: str) -> list[str]:
     Returns: A list of urls for the top result of the search
     """
 
-    # --Removing unnecessary spaces---
-
     keywords = list()  # Array for keywords got from file
-    urls = list()  # Array for urls for returned videos
+    urls = list()
 
     try:
         with open(file_path, "r") as file:
@@ -232,37 +229,14 @@ def query_youtube_from_file(file_path: str, api_key: str) -> list[str]:
         print(f"Error: {e}")
         exit(-1)
 
-    headers = {"Accept": "application/json"}
-
-    query_params = {
-        "part": "snippet",
-        "maxResults": 1,
-        "type": "video",
-        "q": "",
-        "key": api_key,
-    }
 
     print(f"Found keywords for {len(keywords)} videos")
-    print("Retrieving corresponding video urls................")
     try:
         for keyword in keywords:
             keyword = " ".join(keyword.split())  # ---Removing unnecessary spaces
-            query_params["q"] = keyword
-
-            response = requests.get(
-                url=API_EP, headers=headers, params=query_params, timeout=5
-            )
-            response.raise_for_status()
-            resp_dict = response.json()
-
-            video_details = resp_dict["items"]
-
-            if len(video_details) < 1:
-                print("Error fetching Youtube Info")
-                print("If persistent errors try using direct direct links instead")
-                exit(-1)
-
-            urls.append(YT_BASEURL + video_details[0]["id"]["videoId"])
+            results = query_youtube(keyword, 1, api_key)["items"]
+            url = YT_BASEURL + results[0]["id"]["videoId"]
+            urls.append(url)
 
         return urls
     except Exception as err:

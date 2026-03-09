@@ -1,6 +1,6 @@
 [project]
 name = "yt-downloader"
-version = "0.1.0"
+version = "0.1.1"
 description = "Simpler interface to the yt-dlp video downloader."
 authors = [
     { name = "kakeetopius", email = "pius.kakeeto@strathmore.edu" }
