@@ -40,10 +40,10 @@ uv tool install .
 ## Usage
 
 ```sh
-python ydl.py [OPTIONS]
+ydl [OPTIONS]
 ```
-
-### Common Options
+<details>
+<summary>Common Options</summary>
 
 - `-s, --search <keywords>`: Search YouTube for videos.
 - `-l, --link <url>`: Download from a direct YouTube link.
@@ -54,24 +54,26 @@ python ydl.py [OPTIONS]
 - `-f, --format <fmt>`: Specify yt-dlp format string.
 - `-p, --playlist`: Download playlist if link points to one.
 
+</details>
+
 ### Example
 
 Search and download a video:
 
 ```sh
-python ydl.py --search "lofi hip hop"
+ydl --search "lofi hip hop"
 ```
 
 Download from a link:
 
 ```sh
-python ydl.py --link "https://www.youtube.com/watch?v=123xyz"
+ydl --link "https://www.youtube.com/watch?v=123xyz"
 ```
 
 Batch download from a file:
 
 ```sh
-python ydl.py --batch urls.txt
+ydl --batch urls.txt
 ```
 
 ## YouTube API Key
@@ -85,7 +87,5 @@ export yt_api=YOUR_API_KEY
 ## License
 
 MIT
-
-```
-
+`
 ```
