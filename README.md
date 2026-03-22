@@ -25,7 +25,7 @@ git clone https://github.com/kakeetopius/ydl.git
 cd ydl
 ```
 
-Install dependencie:
+Install dependencies:
 
 ```sh
 uv sync
@@ -42,6 +42,7 @@ uv tool install .
 ```sh
 ydl [OPTIONS]
 ```
+
 <details>
 <summary>Common Options</summary>
 
@@ -58,7 +59,7 @@ ydl [OPTIONS]
 
 ### Example
 
-Search and download a video:
+Search for a video and select one to download from an interactive menu.
 
 ```sh
 ydl --search "lofi hip hop"
@@ -87,5 +88,3 @@ export yt_api=YOUR_API_KEY
 ## License
 
 MIT
-`
-```
