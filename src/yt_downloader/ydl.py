@@ -19,10 +19,6 @@ YT_BASEURL = "https://www.youtube.com/watch?v="
 
 PRINT_MAX_LEN = 70
 
-VIDEO_PATH : pathlib.Path
-MUSIC_PATH : pathlib.Path
-
-
 def start():
     options = get_args()
 
