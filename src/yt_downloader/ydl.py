@@ -96,7 +96,6 @@ def get_args():
         help="Path to a file with youtube urls. One per line",
         dest="url_file",
     )
-
     argparser.add_argument(
         "-n",
         "--num-results",
@@ -105,7 +104,6 @@ def get_args():
         dest="num_results",
         default=5
     )
-
     argparser.add_argument(
         "-p",
         "--playlist",
@@ -120,7 +118,6 @@ def get_args():
         help="List yt-dlp formats for the video.",
         dest="list_formats",
     )
-
     argparser.add_argument(
         "-f",
         "--format",
@@ -128,7 +125,6 @@ def get_args():
         help="The yt-dlp format to use instead of the defaults",
         dest="format",
     )
-
     argparser.add_argument(
         "-M",
         "--music-dir",
@@ -137,7 +133,6 @@ def get_args():
         default="",
         dest="music_dir",
     )
-
     argparser.add_argument(
         "-V",
         "--video-dir",
@@ -148,7 +143,6 @@ def get_args():
     )
 
     content_type = argparser.add_mutually_exclusive_group(required=False)
-
     content_type.add_argument(
         "-a",
         "--audio",
@@ -156,7 +150,6 @@ def get_args():
         help="Download audio only",
         dest="audio"
     )
-
     content_type.add_argument(
         "-v",
         "--video",
@@ -164,7 +157,6 @@ def get_args():
         help="Download video only",
         dest="video"
     )
-
     content_type.add_argument(
         "-b",
         "--both",
@@ -174,7 +166,6 @@ def get_args():
     )
 
     options = argparser.parse_args()
-
     return options
 
 
@@ -259,7 +250,6 @@ def get_urls_from_keyword_file(file_path: str, api_key: str) -> list[str]:
     except Exception as e:
         print(f"Error: {e}")
         exit(-1)
-
 
     print(f"Found keywords for {len(keywords)} videos")
     try:
