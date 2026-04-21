@@ -7,6 +7,12 @@ import os
 import pathlib
 from InquirerPy import inquirer
 from InquirerPy.validator import EmptyInputValidator, PathValidator
+from enum import Enum
+
+class ContentType(Enum):
+    VIDEO = 1
+    AUDIO = 2
+    BOTH = 3
 
 API_EP = "https://youtube.googleapis.com/youtube/v3/search"
 YT_BASEURL = "https://www.youtube.com/watch?v="
@@ -16,15 +22,9 @@ PRINT_MAX_LEN = 70
 VIDEO_PATH : pathlib.Path
 MUSIC_PATH : pathlib.Path
 
+
 def start():
     options = get_args()
-
-    HOME = pathlib.Path.home()
-    global VIDEO_PATH
-    global MUSIC_PATH
-
-    VIDEO_PATH = HOME / "Videos"
-    MUSIC_PATH = HOME / "Music"
 
     urls: list[str]
     if options.search:
@@ -34,10 +34,10 @@ def start():
             exit(-1)
         results = query_youtube(options.search,options.num_results,  api_key)
         urls = [show_ytresults_and_get_url(results["items"])]
-    elif options.link:
-        urls = [ options.link ]
-    elif options.batch_file:
-        urls = get_urls_from_file(options.batch_file)
+    elif options.url:
+        urls = [ options.url ]
+    elif options.url_file:
+        urls = get_urls_from_file(options.url_file)
     elif options.kwfile:
         api_key = os.getenv("yt_api")
         if not api_key:
@@ -55,7 +55,16 @@ def start():
     ydl_opts = dict()
     if options.format:
         ydl_opts["format"] = options.format
+    if options.music_dir:
+        ydl_opts["music_dir"] = options.music_dir
+    if options.video_dir:
+        ydl_opts["video_dir"] = options.video_dir
+
     ydl_opts["download_playlist"] = options.playlist
+    
+    ydl_opts["video"] = options.video
+    ydl_opts["audio"] = options.audio
+    ydl_opts["both"] = options.both
 
     download_content(urls, ydl_opts)
 
@@ -75,21 +84,21 @@ def get_args():
         dest="search",
     )
     argparser.add_argument(
-        "-l", "--link", type=str, help="A direct url for the youtube video", dest="link"
+        "-u", "--url", type=str, help="A direct url for the youtube video", dest="url"
     )
     argparser.add_argument(
         "-k",
-        "--keywords",
+        "--keyword-file",
         type=str,
-        help="Path to a file with keywords for the video, each line describing a single video (Should be detailed because the top result is downloaded)",
+        help="Path to a file with keywords for the videos, each line describing a single video (Should be detailed because the top result is downloaded)",
         dest="kwfile",
     )
     argparser.add_argument(
-        "-b",
-        "--batch",
+        "-U",
+        "--url-file",
         type=str,
         help="Path to a file with youtube urls. One per line",
-        dest="batch_file",
+        dest="url_file",
     )
 
     argparser.add_argument(
@@ -123,6 +132,51 @@ def get_args():
         help="The yt-dlp format to use instead of the defaults",
         dest="format",
     )
+
+    argparser.add_argument(
+        "-M",
+        "--music-dir",
+        type = str,
+        help="The directory to save downloaded audio files",
+        default="",
+        dest="music_dir",
+    )
+
+    argparser.add_argument(
+        "-V",
+        "--video-dir",
+        type = str,
+        help="The directory to save downloaded video files",
+        default="",
+        dest="video_dir",
+    )
+
+    content_type = argparser.add_mutually_exclusive_group(required=False)
+
+    content_type.add_argument(
+        "-a",
+        "--audio",
+        action="store_true",
+        help="Download audio only",
+        dest="audio"
+    )
+
+    content_type.add_argument(
+        "-v",
+        "--video",
+        action="store_true",
+        help="Download video only",
+        dest="video"
+    )
+
+    content_type.add_argument(
+        "-b",
+        "--both",
+        action="store_true",
+        help="Download both video and audio",
+        dest="both"
+    )
+
     options = argparser.parse_args()
 
     return options
@@ -131,10 +185,6 @@ def get_args():
 def get_urls_from_file(file_path: str) -> list[str]:
     """
     Function gets urls from a batch file
-
-    Paramaters:
-        file_path: The path to the batch file
-
     Returns: A list of the urls
     """
 
@@ -157,12 +207,6 @@ def get_urls_from_file(file_path: str) -> list[str]:
 def query_youtube(search_str: str, num_results: int, api_key: str) -> dict:
     """
     Function is used to query youtube for search results of given keywords.
-
-    Parameters:
-    1.str: a string with key words
-    2.api_key: the youtube api key
-    Returns:
-    A dictionary of the results returned by youtube.
     """
     # --Removing unnecessary spaces---
     search_str = " ".join(search_str.split())
@@ -205,15 +249,6 @@ def query_youtube(search_str: str, num_results: int, api_key: str) -> dict:
 
 
 def get_urls_from_keyword_file(file_path: str, api_key: str) -> list[str]:
-    """
-
-    Paramaters:
-    1.file_path: Path to the batch file
-    2.api_key: The youtube api key
-
-    Returns: A list of urls for the top result of the search
-    """
-
     keywords = list()  # Array for keywords got from file
     urls = list()
 
@@ -251,10 +286,6 @@ def show_ytresults_and_get_url(results: list) -> str:
     """
     Function prints out information using prettytable about the returned youtube resulted
         and then queries the user which video to download
-
-    Paramaters:
-    1.results: the dictionary containing information returned by youtube.
-
     Returns:
     The url for the youtube video to download
     """
@@ -295,56 +326,89 @@ def download_content(urls: list[str] | str, opts: dict):
 
     Parameters:
     urls: A list of one or more urls to youtube videos for downloading
-    dl_playlist: Indicate whether to download playlist if link supports it True if yes no otherwise.
     """
     TEMP_PATH  = tempfile.gettempdir()
+    HOME = pathlib.Path.home()
+    DEFAULT_VIDEO_PATH = HOME / "Videos"
+    DEFAULT_MUSIC_PATH = HOME / "Music"
 
-    content_type = get_terminal_selection (
-        message = "Select Content Type to download:",
-        selections= ["Audio", "Video", "Both"],
-        default = None
-    )
-    global MUSIC_PATH
-    global VIDEO_PATH
-    path: str = ""
-    ytdlp_format: str = ""
-    format_given: bool = False
+    content_type: ContentType
+    if opts["video"]:
+        content_type = ContentType.VIDEO
+    elif opts["audio"]:
+        content_type = ContentType.AUDIO
+    elif opts["both"]:
+        content_type = ContentType.BOTH
+    else:
+        result = get_terminal_selection (
+            message = "Select Content Type to download:",
+            selections= ["Audio", "Video", "Both"],
+            default = None
+        )
+        if result == "Video":
+            content_type = ContentType.VIDEO
+        elif result == "Audio":
+            content_type = ContentType.AUDIO
+        elif result == "Both":
+            content_type = ContentType.BOTH
+
+    ytdlp_path = ""
+    music_path = ""
+    video_path = ""
+
+    ytdlp_format= ""
+    music_format = ""
+    video_format = ""
+    format_given = False
     
     if "format" in opts:
+        # if ytdlp format was provided by user
         format_given = True
         ytdlp_format = opts["format"]
 
-    if content_type == "Audio":
-        m_path = get_dir_path("Enter music path(Leave blank for default): ")
-        if m_path:
-            path = m_path
+    if content_type == ContentType.AUDIO or content_type == ContentType.BOTH:
+        if "music_dir" in opts:
+            music_path = opts["music_dir"]
         else:
-            path = str(MUSIC_PATH)
-        if not format_given:
-            ytdlp_format = "bestaudio"
-    else:
-        if content_type == "Both":
+            #if music directory was not provided by user prompt the user for one or use default.
             m_path = get_dir_path("Enter music path(Leave blank for default): ")
             if m_path:
-                MUSIC_PATH = pathlib.Path(m_path)
-                ytdlp_format = "bestaudio"
-        v_path = get_dir_path("Enter video path(Leave blank for default): ")
-        if v_path:
-            VIDEO_PATH = pathlib.Path(v_path)
+                music_path = m_path
+            else:
+                music_path = str(DEFAULT_MUSIC_PATH)
+        music_format = "bestaudio"
+    if content_type == ContentType.VIDEO or content_type == ContentType.BOTH:
+        if "video_dir" in opts:
+            video_path = opts["video_dir"]
+        else:
+            #if video directory was not provided by user prompt the user for one or use default.
+            v_path = get_dir_path("Enter video path(Leave blank for default): ")
+            if v_path:
+                video_path = v_path
+            else:
+                video_path = str(DEFAULT_VIDEO_PATH)
         if not format_given: 
             formats = [ "2160", "4320", "1440", "1080", "720", "480"]
-
             format = get_terminal_selection( "Choose format to download", formats, "720")
+            video_format = f"bestaudio+bestvideo[ext=mp4][height<={format}]/best[ext=m4a][height<={format}]"
 
-            ytdlp_format = f"bestaudio+bestvideo[ext=mp4][height<={format}]/best[ext=m4a][height<={format}]"
 
-        path = str(VIDEO_PATH)
-        print(f"Format to download: {ytdlp_format}")
+    if content_type == ContentType.VIDEO or content_type == ContentType.BOTH:
+        #We start by working on video only by setting the ytdlp format to the video format and ytdlp path to video path in case BOTH content type is provided.
+        if not format_given:
+            ytdlp_format = video_format
+        ytdlp_path = video_path
+    elif content_type == ContentType.AUDIO: 
+        if not format_given:
+            ytdlp_format = music_format
+        ytdlp_path = music_path
+
+    print(f"Format to download: {ytdlp_format}")
 
     # -----------------------Options for yt-dlp------------------------------#
     format_sorts = ["ext"]
 
-    output_paths = {"home": path, "temp": str(TEMP_PATH)}
+    output_paths = {"home": ytdlp_path, "temp": str(TEMP_PATH)}
 
     output_format = {"default": "%(title)s.%(ext)s"}
 
@@ -363,16 +427,17 @@ def download_content(urls: list[str] | str, opts: dict):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download(urls)
-            print(f"\nDownload(s) Successfull.\nSaved at: {path}\n")
+            print(f"\nDownload(s) Successfull.\nSaved at: {ytdlp_path}\n")
 
-        if content_type == "Both":  # if audio is also required
-            ydl_opts["format"] = "bestaudio"
-            ydl_opts["paths"]["home"] = str(MUSIC_PATH)
-            path = str(MUSIC_PATH)
+        if content_type == ContentType.BOTH:  
+            #if both audio and video is required we set the ytdlp options now to the audio options for both format and path and download again.
+            #if user gave a format with BOTH content type option that format is assumed to be for video so we override the yt_dlp format to the default music format.
+            ydl_opts["format"] = music_format
+            ydl_opts["paths"]["home"] = music_path
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download(urls)
-                print(f"\nDownload(s) Successfull.\nSaved at: {path}\n")
+                print(f"\nDownload(s) Successfull.\nSaved at: {music_path}\n")
 
     except yt_dlp.DownloadError as err:
         print(f"\nDownload failed:\n {err}")
@@ -390,13 +455,6 @@ def list_ytdlp_formats(urls: list[str]):
 def get_video_id(results: list, index: int) -> str:
     """
     Function get_video_id returns the video id of the youtube video selected for downloading
-
-    Parameters:
-    1.results: Is the result dict containing the info returend by youtube.
-    2.index: The index in the dict to get the video id
-
-    Returns:
-    The video id for the youtube video to download
     """
     i = 1
 
@@ -412,33 +470,17 @@ def get_video_id(results: list, index: int) -> str:
 def truncate(text):
     """
     Function truncate truncates text that is larger than PRINT_MAX_LEN
-
-    Parameters:
-    1.text: The text to truncate
-
-    Returns:
-    The shortened string
     """
     return text[:PRINT_MAX_LEN] + "..."
 
-def get_num_input(message1: str, message2: str, min: int, max: int, allowEmpty: bool) -> int | None:
+def get_num_input(message1: str, invalidMessage: str, min: int, max: int, allowEmpty: bool) -> int | None:
     """
     Function get_num_input is used to get integer input from user
-
-    Parameters:
-    1.message1:     The Message shown to the user the very first time to ask for input
-    2.message2:     The Message shown to the user subsequent times if the input is invalid
-    3.min:          The lowest integer expected
-    4.max:          The highest integer expected
-    5.allowEmpty:   Indicates whether to try to force user to give an input.
-
-    Returns:
-    An integer between min and max inclusive if allowEmpty is false
     """
     
     value = inquirer.number(
         message=message1,
-        invalid_message=message2,
+        invalid_message=invalidMessage,
         min_allowed=min,
         max_allowed=max,
         mandatory=True,
