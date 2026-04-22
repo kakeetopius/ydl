@@ -61,6 +61,7 @@ def start():
     ydl_opts["video"] = options.video
     ydl_opts["audio"] = options.audio
     ydl_opts["both"] = options.both
+    ydl_opts["subtitles"] = options.subtitles
 
     download_content(urls, ydl_opts)
 
@@ -140,6 +141,13 @@ def get_args():
         help="The directory to save downloaded video files",
         default="",
         dest="video_dir",
+    )
+    argparser.add_argument(
+        "-S",
+        "--subtitles",
+        action="store_true",
+        help="Add subtitles to video(s) if available.",
+        dest="subtitles"
     )
 
     content_type = argparser.add_mutually_exclusive_group(required=False)
@@ -398,6 +406,7 @@ def download_content(urls: list[str] | str, opts: dict):
 
     output_format = {"default": "%(title)s.%(ext)s"}
 
+    addSubtitles: bool = opts["subtitles"]
     ydl_opts: dict = {
         "quiet": False,
         "format": ytdlp_format,
@@ -406,7 +415,17 @@ def download_content(urls: list[str] | str, opts: dict):
         "outtmpl": output_format,
         "paths": output_paths,
         "noplaylist": not opts["download_playlist"],
+        "writesubtitles": addSubtitles,
     }
+    if addSubtitles:
+        ydl_opts["subtitleslangs"] = "en",
+
+        ydl_opts["postprocessors"] = [
+            {
+                "key": "FFmpegEmbedSubtitle", 
+            }
+        ]
+        
     # ------------------------------------------------------------------------#
 
     print("\n")
