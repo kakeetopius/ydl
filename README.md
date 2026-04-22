@@ -47,13 +47,13 @@ ydl [OPTIONS]
 <summary>Common Options</summary>
 
 - `-s, --search <keywords>`: Search YouTube for videos.
-- `-l, --link <url>`: Download from a direct YouTube link.
-- `-b, --batch <file>`: Download from a file containing YouTube URLs (one per line).
-- `-k, --keywords <file>`: Download top result for each line of keywords in a file.
-- `-n, --num-results <N>`: Number of search results to show (default: 5).
-- `-F, --list-formats`: List available yt-dlp formats for the video.
-- `-f, --format <fmt>`: Specify yt-dlp format string.
+- `-u, --url <url>`: Download from a direct YouTube link.
+- `-U, --url-file <file>`: Download from a file containing YouTube URLs (one per line).
+- `-k, --keyword-file <file>`: Download top result for each line of keywords in a file.
+- `-n, --num-results <N>`: Number of search results to return (default: 5).
 - `-p, --playlist`: Download playlist if link points to one.
+- `-S, --subtitles`: Add subtitles to video(s) if available.
+- `-h, --help`: Get help
 
 </details>
 
@@ -62,19 +62,19 @@ ydl [OPTIONS]
 Search for a video and select one to download from an interactive menu.
 
 ```sh
-ydl --search "lofi hip hop"
+ydl --search "wrong places - joshua baraka"
 ```
 
 Download from a link:
 
 ```sh
-ydl --link "https://www.youtube.com/watch?v=123xyz"
+ydl --url "https://www.youtube.com/watch?v=123xyz"
 ```
 
 Batch download from a file:
 
 ```sh
-ydl --batch urls.txt
+ydl --url-file urls.txt
 ```
 
 ## YouTube API Key
