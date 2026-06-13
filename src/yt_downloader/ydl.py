@@ -9,17 +9,16 @@ from InquirerPy import inquirer
 from InquirerPy.validator import EmptyInputValidator, PathValidator
 from enum import Enum
 
+API_KEY_NAME = "yt_api"
+API_EP = "https://youtube.googleapis.com/youtube/v3/search"
+YT_BASEURL = "https://www.youtube.com/watch?v="
+PRINT_MAX_LEN = 70
+
 
 class ContentType(Enum):
     VIDEO = 1
     AUDIO = 2
     BOTH = 3
-
-
-API_KEY_NAME = "yt_api"
-API_EP = "https://youtube.googleapis.com/youtube/v3/search"
-YT_BASEURL = "https://www.youtube.com/watch?v="
-PRINT_MAX_LEN = 70
 
 
 def start():
@@ -331,27 +330,34 @@ def download_with_ytdlp(urls: list[str], ydl_opts: dict):
 
 
 def get_content_type(opts) -> ContentType:
-    content_type: ContentType
     if opts["video"]:
-        content_type = ContentType.VIDEO
+        return ContentType.VIDEO
     elif opts["audio"]:
-        content_type = ContentType.AUDIO
+        return ContentType.AUDIO
     elif opts["both"]:
-        content_type = ContentType.BOTH
-    else:
-        result = get_terminal_selection(
-            message="Select Content Type to download:",
-            selections=["Audio", "Video", "Both"],
-            default=None,
-        )
-        if result == "Video":
-            content_type = ContentType.VIDEO
-        elif result == "Audio":
-            content_type = ContentType.AUDIO
-        elif result == "Both":
-            content_type = ContentType.BOTH
+        return ContentType.BOTH
 
-    return content_type
+    video_dir_given = "video_dir" in opts
+    music_dir_given = "music_dir" in opts
+
+    if video_dir_given and music_dir_given:
+        return ContentType.BOTH
+    elif video_dir_given:
+        return ContentType.VIDEO
+    elif music_dir_given:
+        return ContentType.AUDIO
+
+    result = get_terminal_selection(
+        message="Select Content Type to download:",
+        selections=["Audio", "Video", "Both"],
+        default=None,
+    )
+    if result == "Video":
+        return ContentType.VIDEO
+    elif result == "Audio":
+        return ContentType.AUDIO
+    else:
+        return ContentType.BOTH
 
 
 def get_music_opts(opts) -> tuple[str, str]:
