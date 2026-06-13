@@ -147,8 +147,8 @@ def get_urls_from_file(file_path: str) -> list[str]:
             for line in file:
                 stripped = line.strip()
                 if not stripped:
-                    continue
                     # skip empty line
+                    continue
                 urls.append(stripped)
     except Exception as e:
         print(f"Error: {e}")
@@ -201,15 +201,15 @@ def query_youtube(search_str: str, num_results: int, api_key: str) -> dict:
 
 
 def get_urls_from_keyword_file(file_path: str, api_key: str) -> list[str]:
-    keywords = list()  # Array for keywords got from file
+    keywords = list()
     urls = list()
 
     try:
         with open(file_path, "r") as file:
+            file
             for line in file:
                 stripped = line.strip()
                 if not stripped:
-                    # skipping empty line
                     continue
                 keywords.append(stripped)
     except Exception as e:
@@ -245,10 +245,8 @@ def show_ytresults_and_get_url(results: list) -> str:
     table.field_names = ["Index", "Title", "Channel"]
 
     for result in results:
-        title = (result["snippet"]["title"],)
-        title = title[0]
-        channel = (result["snippet"]["channelTitle"],)
-        channel = channel[0]
+        title = result["snippet"]["title"]
+        channel = result["snippet"]["channelTitle"]
 
         if len(title) > PRINT_MAX_LEN:
             title = truncate(title)
@@ -260,13 +258,11 @@ def show_ytresults_and_get_url(results: list) -> str:
 
     print(table)
 
-    mess1 = "Enter Index of Video to download:"
-    mess2 = "Enter Correct Index"
+    message = "Enter Index of Video to download:"
+    invalidMessage = "Enter Correct Index"
     max_input = len(results)
 
-    num = get_num_input(mess1, mess2, 1, max_input, False)
-    if not num:
-        return ""
+    num = get_num_input(message, invalidMessage, 1, max_input, False)
 
     return YT_BASEURL + get_video_id(results, num)
 
@@ -402,12 +398,12 @@ def get_video_opts(opts) -> tuple[str, str]:
     return (video_format, video_path)
 
 
-def get_ytdlp_opts(opts, format, path) -> dict:
+def get_ytdlp_opts(opts, format, outpath) -> dict:
     TEMP_PATH = tempfile.gettempdir()
 
     format_sorts = ["ext"]
 
-    output_paths = {"home": path, "temp": str(TEMP_PATH)}
+    output_paths = {"home": outpath, "temp": str(TEMP_PATH)}
 
     output_format = {"default": "%(title)s.%(ext)s"}
 
@@ -457,8 +453,8 @@ def get_urls_and_opts_from_arguments(options) -> tuple[list[str], dict]:
             )
         urls = get_urls_from_keyword_file(options.kwfile, api_key)
     else:
-        print("Invalid Usage")
-        print("Use the -h option to get help")
+        print("Please provide a url or keywords to query youtube with.")
+        print("Use ydl -h for more information")
         exit(-1)
 
     ydl_opts = dict()
@@ -510,7 +506,7 @@ def truncate(text):
 
 def get_num_input(
     message1: str, invalidMessage: str, min: int, max: int, allowEmpty: bool
-) -> int | None:
+) -> int:
     """
     Function get_num_input is used to get integer input from user
     """
@@ -526,7 +522,9 @@ def get_num_input(
     return int(value)
 
 
-def get_terminal_selection(message: str, selections: list[str], default) -> str:
+def get_terminal_selection(
+    message: str, selections: list[str], default: str | None
+) -> str:
     return inquirer.select(
         message=message,
         choices=selections,
@@ -536,7 +534,7 @@ def get_terminal_selection(message: str, selections: list[str], default) -> str:
     ).execute()
 
 
-def get_dir_path(message: str):
+def get_dir_path(message: str) -> str:
     return inquirer.filepath(
         message=message,
         only_directories=True,
