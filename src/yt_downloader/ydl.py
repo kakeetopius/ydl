@@ -16,6 +16,7 @@ class ContentType(Enum):
     BOTH = 3
 
 
+API_KEY_NAME = "yt_api"
 API_EP = "https://youtube.googleapis.com/youtube/v3/search"
 YT_BASEURL = "https://www.youtube.com/watch?v="
 PRINT_MAX_LEN = 70
@@ -24,50 +25,10 @@ PRINT_MAX_LEN = 70
 def start():
     options = get_args()
 
-    urls: list[str]
-    if options.search:
-        api_key = os.getenv("yt_api")
-        if not api_key:
-            raise RuntimeError(
-                "yt_api environment variable is not set. please set before continuing"
-            )
-            exit(-1)
-        results = query_youtube(options.search, options.num_results, api_key)
-        urls = [show_ytresults_and_get_url(results["items"])]
-    elif options.url:
-        urls = [options.url]
-    elif options.url_file:
-        urls = get_urls_from_file(options.url_file)
-    elif options.kwfile:
-        api_key = os.getenv("yt_api")
-        if not api_key:
-            raise RuntimeError(
-                "yt_api environment variable is not set. please set before continuing"
-            )
-            exit(-1)
-        urls = get_urls_from_keyword_file(options.kwfile, api_key)
-    else:
-        print("Invalid Usage")
-        print("Use the -h option to get help")
-        exit(-1)
+    urls, ydl_opts = get_urls_and_opts_from_arguments(options)
 
     if options.list_formats:
         return list_ytdlp_formats(urls)
-
-    ydl_opts = dict()
-    if options.format:
-        ydl_opts["format"] = options.format
-    if options.music_dir:
-        ydl_opts["music_dir"] = options.music_dir
-    if options.video_dir:
-        ydl_opts["video_dir"] = options.video_dir
-
-    ydl_opts["download_playlist"] = options.playlist
-
-    ydl_opts["video"] = options.video
-    ydl_opts["audio"] = options.audio
-    ydl_opts["both"] = options.both
-    ydl_opts["subtitles"] = options.subtitles
 
     download_content(urls, ydl_opts)
 
@@ -107,7 +68,7 @@ def get_args():
         "-n",
         "--num-results",
         type=str,
-        help="The number of results to retrieve for each video if keywords are used to search. (Default is 5)",
+        help="The number of results to retrieve for the video if keywords are used to search. (Default is 5)",
         dest="num_results",
         default=5,
     )
@@ -129,7 +90,7 @@ def get_args():
         "-f",
         "--format",
         type=str,
-        help="The yt-dlp format to use instead of the defaults",
+        help="The yt-dlp format to use instead of the defaults (video only)",
         dest="format",
     )
     argparser.add_argument(
@@ -201,7 +162,6 @@ def query_youtube(search_str: str, num_results: int, api_key: str) -> dict:
     """
     Function is used to query youtube for search results of given keywords.
     """
-    # --Removing unnecessary spaces---
     search_str = " ".join(search_str.split())
 
     headers = {"Accept": "application/json"}
@@ -260,7 +220,7 @@ def get_urls_from_keyword_file(file_path: str, api_key: str) -> list[str]:
     print(f"Found keywords for {len(keywords)} videos")
     try:
         for keyword in keywords:
-            keyword = " ".join(keyword.split())  # ---Removing unnecessary spaces
+            keyword = " ".join(keyword.split())
             results = query_youtube(keyword, 1, api_key)["items"]
             url = YT_BASEURL + results[0]["id"]["videoId"]
             urls.append(url)
@@ -312,18 +272,65 @@ def show_ytresults_and_get_url(results: list) -> str:
     return YT_BASEURL + get_video_id(results, num)
 
 
-def download_content(urls: list[str] | str, opts: dict):
+def download_content(urls: list[str], opts: dict):
     """
     Function download_content downloads the youtube video pointed to by the urls given using yt_dlp module
 
     Parameters:
     urls: A list of one or more urls to youtube videos for downloading
     """
-    TEMP_PATH = tempfile.gettempdir()
-    HOME = pathlib.Path.home()
-    DEFAULT_VIDEO_PATH = HOME / "Videos"
-    DEFAULT_MUSIC_PATH = HOME / "Music"
 
+    content_type: ContentType = get_content_type(opts)
+
+    ytdlp_path = ""
+    music_path = ""
+    video_path = ""
+
+    ytdlp_format = ""
+    music_format = ""
+    video_format = ""
+
+    if content_type == ContentType.AUDIO or content_type == ContentType.BOTH:
+        music_format, music_path = get_music_opts(opts)
+    if content_type == ContentType.VIDEO or content_type == ContentType.BOTH:
+        video_format, video_path = get_video_opts(opts)
+
+    if content_type == ContentType.VIDEO or content_type == ContentType.BOTH:
+        # We start by working on video only by setting the ytdlp format to the video format and ytdlp path to video path in case BOTH content type is provided.
+        ytdlp_format = video_format
+        ytdlp_path = video_path
+    elif content_type == ContentType.AUDIO:
+        ytdlp_format = music_format
+        ytdlp_path = music_path
+
+    print(f"Format to download: {ytdlp_format}")
+
+    ydl_opts = get_ytdlp_opts(opts, ytdlp_format, ytdlp_path)
+
+    print("\nDownloading Content......................")
+    download_with_ytdlp(urls, ydl_opts)
+
+    if content_type == ContentType.BOTH:
+        ydl_opts["format"] = music_format
+        ydl_opts["paths"]["home"] = music_path
+        print("Downloading Music Files now....................")
+        download_with_ytdlp(urls, ydl_opts)
+
+
+def download_with_ytdlp(urls: list[str], ydl_opts: dict):
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download(urls)
+            print(
+                f"\nDownload(s) Successfull.\nSaved at: {ydl_opts['paths']['home']}\n"
+            )
+    except yt_dlp.DownloadError as err:
+        print(f"\nDownload failed:\n {err}")
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+def get_content_type(opts) -> ContentType:
     content_type: ContentType
     if opts["video"]:
         content_type = ContentType.VIDEO
@@ -344,69 +351,64 @@ def download_content(urls: list[str] | str, opts: dict):
         elif result == "Both":
             content_type = ContentType.BOTH
 
-    ytdlp_path = ""
-    music_path = ""
-    video_path = ""
+    return content_type
 
-    ytdlp_format = ""
-    music_format = ""
-    video_format = ""
-    format_given = False
 
-    if "format" in opts:
-        # if ytdlp format was provided by user
-        format_given = True
-        ytdlp_format = opts["format"]
+def get_music_opts(opts) -> tuple[str, str]:
+    HOME = pathlib.Path.home()
+    DEFAULT_MUSIC_PATH = HOME / "Music"
 
-    if content_type == ContentType.AUDIO or content_type == ContentType.BOTH:
-        if "music_dir" in opts:
-            music_path = opts["music_dir"]
+    if "music_dir" in opts:
+        music_path = opts["music_dir"]
+    else:
+        # if music directory was not provided by user prompt the user for one or use default.
+        m_path = get_dir_path("Enter music path(Leave blank for default): ")
+        if m_path:
+            music_path = m_path
         else:
-            # if music directory was not provided by user prompt the user for one or use default.
-            m_path = get_dir_path("Enter music path(Leave blank for default): ")
-            if m_path:
-                music_path = m_path
-            else:
-                music_path = str(DEFAULT_MUSIC_PATH)
-        music_format = "bestaudio"
-    if content_type == ContentType.VIDEO or content_type == ContentType.BOTH:
-        if "video_dir" in opts:
-            video_path = opts["video_dir"]
+            music_path = str(DEFAULT_MUSIC_PATH)
+    music_format = "bestaudio"
+
+    return (music_format, music_path)
+
+
+def get_video_opts(opts) -> tuple[str, str]:
+    HOME = pathlib.Path.home()
+    DEFAULT_VIDEO_PATH = HOME / "Videos"
+
+    if "video_dir" in opts:
+        video_path = opts["video_dir"]
+    else:
+        # if video directory was not provided by user prompt the user for one or use default.
+        v_path = get_dir_path("Enter video path(Leave blank for default): ")
+        if v_path:
+            video_path = v_path
         else:
-            # if video directory was not provided by user prompt the user for one or use default.
-            v_path = get_dir_path("Enter video path(Leave blank for default): ")
-            if v_path:
-                video_path = v_path
-            else:
-                video_path = str(DEFAULT_VIDEO_PATH)
-        if not format_given:
-            formats = ["2160", "4320", "1440", "1080", "720", "480"]
-            format = get_terminal_selection("Choose format to download", formats, "720")
-            video_format = f"bestaudio+bestvideo[ext=mp4][height<={format}]/best[ext=m4a][height<={format}]"
+            video_path = str(DEFAULT_VIDEO_PATH)
 
-    if content_type == ContentType.VIDEO or content_type == ContentType.BOTH:
-        # We start by working on video only by setting the ytdlp format to the video format and ytdlp path to video path in case BOTH content type is provided.
-        if not format_given:
-            ytdlp_format = video_format
-        ytdlp_path = video_path
-    elif content_type == ContentType.AUDIO:
-        if not format_given:
-            ytdlp_format = music_format
-        ytdlp_path = music_path
+    if "format" not in opts:
+        formats = ["2160", "4320", "1440", "1080", "720", "480"]
+        format = get_terminal_selection("Choose format to download", formats, "720")
+        video_format = f"bestaudio+bestvideo[ext=mp4][height<={format}]/best[ext=m4a][height<={format}]"
+    else:
+        video_format = opts["format"]
 
-    print(f"Format to download: {ytdlp_format}")
+    return (video_format, video_path)
 
-    # -----------------------Options for yt-dlp------------------------------#
+
+def get_ytdlp_opts(opts, format, path) -> dict:
+    TEMP_PATH = tempfile.gettempdir()
+
     format_sorts = ["ext"]
 
-    output_paths = {"home": ytdlp_path, "temp": str(TEMP_PATH)}
+    output_paths = {"home": path, "temp": str(TEMP_PATH)}
 
     output_format = {"default": "%(title)s.%(ext)s"}
 
     addSubtitles: bool = opts["subtitles"]
     ydl_opts: dict = {
         "quiet": False,
-        "format": ytdlp_format,
+        "format": format,
         "format_sort": format_sorts,
         "concurrent_fragment_downloads": 5,
         "outtmpl": output_format,
@@ -423,28 +425,52 @@ def download_content(urls: list[str] | str, opts: dict):
             }
         ]
 
-    # ------------------------------------------------------------------------#
+    return ydl_opts
 
-    print("\n")
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(urls)
-            print(f"\nDownload(s) Successfull.\nSaved at: {ytdlp_path}\n")
 
-        if content_type == ContentType.BOTH:
-            # if both audio and video is required we set the ytdlp options now to the audio options for both format and path and download again.
-            # if user gave a format with BOTH content type option that format is assumed to be for video so we override the yt_dlp format to the default music format.
-            ydl_opts["format"] = music_format
-            ydl_opts["paths"]["home"] = music_path
+def get_urls_and_opts_from_arguments(options) -> tuple[list[str], dict]:
+    urls: list[str]
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download(urls)
-                print(f"\nDownload(s) Successfull.\nSaved at: {music_path}\n")
+    if options.search:
+        api_key = os.getenv("yt_api")
+        if not api_key:
+            raise RuntimeError(
+                "yt_api environment variable is not set. please set before continuing"
+            )
+        results = query_youtube(options.search, options.num_results, api_key)
+        urls = [show_ytresults_and_get_url(results["items"])]
+    elif options.url:
+        urls = [options.url]
+    elif options.url_file:
+        urls = get_urls_from_file(options.url_file)
+    elif options.kwfile:
+        api_key = os.getenv(API_KEY_NAME)
+        if not api_key:
+            raise RuntimeError(
+                "yt_api environment variable is not set. please set before continuing"
+            )
+        urls = get_urls_from_keyword_file(options.kwfile, api_key)
+    else:
+        print("Invalid Usage")
+        print("Use the -h option to get help")
+        exit(-1)
 
-    except yt_dlp.DownloadError as err:
-        print(f"\nDownload failed:\n {err}")
-    except Exception as e:
-        print(f"Error: {e}")
+    ydl_opts = dict()
+    if options.format:
+        ydl_opts["format"] = options.format
+    if options.music_dir:
+        ydl_opts["music_dir"] = options.music_dir
+    if options.video_dir:
+        ydl_opts["video_dir"] = options.video_dir
+
+    ydl_opts["download_playlist"] = options.playlist
+
+    ydl_opts["video"] = options.video
+    ydl_opts["audio"] = options.audio
+    ydl_opts["both"] = options.both
+    ydl_opts["subtitles"] = options.subtitles
+
+    return urls, ydl_opts
 
 
 def list_ytdlp_formats(urls: list[str]):
