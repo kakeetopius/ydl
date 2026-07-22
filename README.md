@@ -87,4 +87,4 @@ export yt_api=YOUR_API_KEY
 
 ## License
 
-MIT
+[MIT](LICENSE)

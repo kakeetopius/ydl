@@ -1,3 +1,4 @@
+import shutil
 import yt_dlp
 import tempfile
 import requests
@@ -5,6 +6,7 @@ import argparse
 import prettytable
 import os
 import pathlib
+import re
 from InquirerPy import inquirer
 from InquirerPy.validator import EmptyInputValidator, PathValidator
 from enum import Enum
@@ -13,6 +15,8 @@ API_KEY_NAME = "yt_api"
 API_EP = "https://youtube.googleapis.com/youtube/v3/search"
 YT_BASEURL = "https://www.youtube.com/watch?v="
 PRINT_MAX_LEN = 70
+TEMP_PATH = pathlib.Path(tempfile.gettempdir())
+YDL_TMP_DIR = TEMP_PATH / "ydl"
 
 
 class ContentType(Enum):
@@ -22,17 +26,18 @@ class ContentType(Enum):
 
 
 def start():
-    options = get_args()
+    urls, opts = parse_args()
 
-    urls, ydl_opts = get_urls_and_opts_from_arguments(options)
+    if YDL_TMP_DIR.exists():
+        shutil.rmtree(YDL_TMP_DIR)
 
-    if options.list_formats:
+    if opts["list_formats"]:
         return list_ytdlp_formats(urls)
 
-    download_content(urls, ydl_opts)
+    download_content(urls, opts)
 
 
-def get_args():
+def parse_args() -> tuple[list[str], dict]:
     """
     Function get_args gets arguments from command line
     """
@@ -64,28 +69,6 @@ def get_args():
         dest="url_file",
     )
     argparser.add_argument(
-        "-n",
-        "--num-results",
-        type=str,
-        help="The number of results to retrieve for the video if keywords are used to search. (Default is 5)",
-        dest="num_results",
-        default=5,
-    )
-    argparser.add_argument(
-        "-p",
-        "--playlist",
-        action="store_true",
-        help="Download playlist if link points to one.",
-        dest="playlist",
-    )
-    argparser.add_argument(
-        "-F",
-        "--list-formats",
-        action="store_true",
-        help="List yt-dlp formats for the video.",
-        dest="list_formats",
-    )
-    argparser.add_argument(
         "-f",
         "--format",
         type=str,
@@ -109,30 +92,57 @@ def get_args():
         dest="video_dir",
     )
     argparser.add_argument(
+        "-n",
+        "--num-results",
+        type=str,
+        help="The number of results to retrieve for the video if keywords are used to search. (Default is 5)",
+        dest="num_results",
+        default=5,
+    )
+    argparser.add_argument(
+        "-F",
+        "--list-formats",
+        action="store_true",
+        help="List yt-dlp formats for the video instead of downloading.",
+        dest="list_formats",
+    )
+    argparser.add_argument(
+        "-p",
+        "--playlist",
+        action="store_true",
+        help="Download playlist if link points to one.",
+        dest="playlist",
+    )
+    argparser.add_argument(
         "-S",
         "--subtitles",
         action="store_true",
         help="Add subtitles to video(s) if available.",
         dest="subtitles",
     )
+    argparser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Show detailed progress information.",
+        dest="verbose",
+    )
 
     content_type = argparser.add_mutually_exclusive_group(required=False)
     content_type.add_argument(
-        "-a", "--audio", action="store_true", help="Download audio only", dest="audio"
+        "--audio", action="store_true", help="Download audio only", dest="audio"
     )
     content_type.add_argument(
-        "-v", "--video", action="store_true", help="Download video only", dest="video"
+        "--video", action="store_true", help="Download video only", dest="video"
     )
     content_type.add_argument(
-        "-b",
         "--both",
         action="store_true",
         help="Download both video and audio",
         dest="both",
     )
 
-    options = argparser.parse_args()
-    return options
+    return get_urls_and_opts_from_arguments(argparser.parse_args())
 
 
 def get_urls_from_file(file_path: str) -> list[str]:
@@ -142,17 +152,13 @@ def get_urls_from_file(file_path: str) -> list[str]:
     """
 
     urls = list()
-    try:
-        with open(file_path, "r") as file:
-            for line in file:
-                stripped = line.strip()
-                if not stripped:
-                    # skip empty line
-                    continue
-                urls.append(stripped)
-    except Exception as e:
-        print(f"Error: {e}")
-        exit(-1)
+    with open(file_path, "r") as file:
+        for line in file:
+            stripped = line.strip()
+            if not stripped:
+                # skip empty line
+                continue
+            urls.append(stripped)
 
     return urls
 
@@ -180,20 +186,6 @@ def query_youtube(search_str: str, num_results: int, api_key: str) -> dict:
         )
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.ConnectionError:
-        print("Connection Error. Check your connection")
-        exit(-1)
-    except requests.exceptions.Timeout:
-        print("Connection timed out")
-        exit(-1)
-    except requests.exceptions.HTTPError as err:
-        print(f"HTTP error occured: \n{err}")
-        print("If persistent errors try using direct direct links instead")
-        exit(-1)
-    except requests.exceptions.RequestException as err:
-        print(f"Unexpected error: \n{err}")
-        print("If persistent errors try using direct direct links instead")
-        exit(-1)
     except Exception as err:
         print(f"Error fetching video info: {err}")
         print("If persistent errors try using direct direct links instead")
@@ -204,67 +196,22 @@ def get_urls_from_keyword_file(file_path: str, api_key: str) -> list[str]:
     keywords = list()
     urls = list()
 
-    try:
-        with open(file_path, "r") as file:
-            file
-            for line in file:
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                keywords.append(stripped)
-    except Exception as e:
-        print(f"Error: {e}")
-        exit(-1)
+    with open(file_path, "r") as file:
+        file
+        for line in file:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            keywords.append(stripped)
 
     print(f"Found keywords for {len(keywords)} videos")
-    try:
-        for keyword in keywords:
-            keyword = " ".join(keyword.split())
-            results = query_youtube(keyword, 1, api_key)["items"]
-            url = YT_BASEURL + results[0]["id"]["videoId"]
-            urls.append(url)
+    for keyword in keywords:
+        keyword = " ".join(keyword.split())
+        results = query_youtube(keyword, 1, api_key)["items"]
+        url = YT_BASEURL + results[0]["id"]["videoId"]
+        urls.append(url)
 
-        return urls
-    except Exception as err:
-        print(f"Error fetching video info: {err}")
-        print(
-            "If persistent errors and not connection issues. Try using direct direct links instead"
-        )
-        exit(-1)
-
-
-def show_ytresults_and_get_url(results: list) -> str:
-    """
-    Function prints out information using prettytable about the returned youtube resulted
-        and then queries the user which video to download
-    Returns:
-    The url for the youtube video to download
-    """
-    i = 1
-    table = prettytable.PrettyTable()
-    table.field_names = ["Index", "Title", "Channel"]
-
-    for result in results:
-        title = result["snippet"]["title"]
-        channel = result["snippet"]["channelTitle"]
-
-        if len(title) > PRINT_MAX_LEN:
-            title = truncate(title)
-        if len(channel) > PRINT_MAX_LEN:
-            channel = truncate(channel)
-
-        table.add_row([i, title, channel])
-        i += 1
-
-    print(table)
-
-    message = "Enter Index of Video to download:"
-    invalidMessage = "Enter Correct Index"
-    max_input = len(results)
-
-    num = get_num_input(message, invalidMessage, 1, max_input, False)
-
-    return YT_BASEURL + get_video_id(results, num)
+    return urls
 
 
 def download_content(urls: list[str], opts: dict):
@@ -277,7 +224,6 @@ def download_content(urls: list[str], opts: dict):
 
     content_type: ContentType = get_content_type(opts)
 
-    ytdlp_path = ""
     music_path = ""
     video_path = ""
 
@@ -291,38 +237,66 @@ def download_content(urls: list[str], opts: dict):
         video_format, video_path = get_video_opts(opts)
 
     if content_type == ContentType.VIDEO or content_type == ContentType.BOTH:
-        # We start by working on video only by setting the ytdlp format to the video format and ytdlp path to video path in case BOTH content type is provided.
         ytdlp_format = video_format
-        ytdlp_path = video_path
     elif content_type == ContentType.AUDIO:
         ytdlp_format = music_format
-        ytdlp_path = music_path
 
     print(f"Format to download: {ytdlp_format}")
 
-    ydl_opts = get_ytdlp_opts(opts, ytdlp_format, ytdlp_path)
+    ydl_opts = get_ytdlp_opts(opts, ytdlp_format, content_type)
 
     print("\nDownloading Content......................")
     download_with_ytdlp(urls, ydl_opts)
-
-    if content_type == ContentType.BOTH:
-        ydl_opts["format"] = music_format
-        ydl_opts["paths"]["home"] = music_path
-        print("Downloading Music Files now....................")
-        download_with_ytdlp(urls, ydl_opts)
+    save_files_to_correct_path(content_type, music_path, video_path)
 
 
 def download_with_ytdlp(urls: list[str], ydl_opts: dict):
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(urls)
-            print(
-                f"\nDownload(s) Successfull.\nSaved at: {ydl_opts['paths']['home']}\n"
-            )
-    except yt_dlp.DownloadError as err:
-        print(f"\nDownload failed:\n {err}")
-    except Exception as e:
-        print(f"Error: {e}")
+    YDL_TMP_DIR.mkdir(exist_ok=True, parents=True)
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download(urls)
+
+
+def list_ytdlp_formats(urls: list[str]):
+    yt_dlp_opts = {"listformats": True}
+
+    with yt_dlp.YoutubeDL(yt_dlp_opts) as ydl:
+        ydl.download(urls)
+
+
+def save_files_to_correct_path(
+    content_type: ContentType, music_path: str, video_path: str
+):
+    pathlib.Path(music_path).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(video_path).mkdir(parents=True, exist_ok=True)
+
+    for file in YDL_TMP_DIR.iterdir():
+        if is_video_extension(file.suffix):
+            if len(file.suffixes) > 1 and content_type == ContentType.BOTH:
+                # probably a temp video file with no audio
+                file.unlink(missing_ok=True)
+                continue
+            file.move_into(video_path)
+        elif is_audio_extension(file.suffix):
+            if len(file.suffixes) > 1 and content_type == ContentType.BOTH:
+                # probably audio file that was merged into final video file. The file will have an extension like .f208.ext
+                file.move(pathlib.Path(music_path) / clean_file_name(file.name))
+                continue
+            file.move_into(music_path)
+
+    print("\nDownload(s) Successfull")
+    if content_type == ContentType.AUDIO or content_type == ContentType.BOTH:
+        print("Audio Files saved at: ", music_path)
+    if content_type == ContentType.VIDEO or content_type == ContentType.BOTH:
+        print("Video Files saved at: ", video_path)
+
+
+def clean_file_name(name: str) -> str:
+    """
+    For yt-dlp temp files that are kept when downloading both audio and video at the same time, they will have extensions like .f903.ext.
+    this func strips the .f903 part.
+    """
+    return re.sub(r"\.f\d+(?=\.[^.]+$)", "", name)
 
 
 def get_content_type(opts) -> ContentType:
@@ -398,18 +372,16 @@ def get_video_opts(opts) -> tuple[str, str]:
     return (video_format, video_path)
 
 
-def get_ytdlp_opts(opts, format, outpath) -> dict:
-    TEMP_PATH = tempfile.gettempdir()
-
+def get_ytdlp_opts(opts, format, contentType: ContentType) -> dict:
     format_sorts = ["ext"]
 
-    output_paths = {"home": outpath, "temp": str(TEMP_PATH)}
+    output_paths = {"home": str(YDL_TMP_DIR), "temp": str(TEMP_PATH)}
 
     output_format = {"default": "%(title)s.%(ext)s"}
 
     addSubtitles: bool = opts["subtitles"]
     ydl_opts: dict = {
-        "quiet": False,
+        "quiet": opts["quiet"],
         "format": format,
         "format_sort": format_sorts,
         "concurrent_fragment_downloads": 5,
@@ -418,6 +390,9 @@ def get_ytdlp_opts(opts, format, outpath) -> dict:
         "noplaylist": not opts["download_playlist"],
         "writesubtitles": addSubtitles,
     }
+    if contentType == ContentType.BOTH:
+        ydl_opts["keepvideo"] = True
+
     if addSubtitles:
         ydl_opts["subtitleslangs"] = ("en",)
 
@@ -430,7 +405,9 @@ def get_ytdlp_opts(opts, format, outpath) -> dict:
     return ydl_opts
 
 
-def get_urls_and_opts_from_arguments(options) -> tuple[list[str], dict]:
+def get_urls_and_opts_from_arguments(
+    options: argparse.Namespace,
+) -> tuple[list[str], dict]:
     urls: list[str]
 
     if options.search:
@@ -467,19 +444,48 @@ def get_urls_and_opts_from_arguments(options) -> tuple[list[str], dict]:
 
     ydl_opts["download_playlist"] = options.playlist
 
+    ydl_opts["list_formats"] = options.list_formats
     ydl_opts["video"] = options.video
     ydl_opts["audio"] = options.audio
     ydl_opts["both"] = options.both
     ydl_opts["subtitles"] = options.subtitles
+    ydl_opts["quiet"] = not options.verbose
 
     return urls, ydl_opts
 
 
-def list_ytdlp_formats(urls: list[str]):
-    yt_dlp_opts = {"listformats": True}
+def show_ytresults_and_get_url(results: list) -> str:
+    """
+    Function prints out information using prettytable about the returned youtube resulted
+        and then queries the user which video to download
+    Returns:
+    The url for the youtube video to download
+    """
+    i = 1
+    table = prettytable.PrettyTable()
+    table.field_names = ["Index", "Title", "Channel"]
 
-    with yt_dlp.YoutubeDL(yt_dlp_opts) as ydl:
-        ydl.download(urls)
+    for result in results:
+        title = result["snippet"]["title"]
+        channel = result["snippet"]["channelTitle"]
+
+        if len(title) > PRINT_MAX_LEN:
+            title = truncate(title)
+        if len(channel) > PRINT_MAX_LEN:
+            channel = truncate(channel)
+
+        table.add_row([i, title, channel])
+        i += 1
+
+    print(table)
+
+    message = "Enter Index of Video to download:"
+    invalidMessage = "Enter Correct Index"
+    max_input = len(results)
+
+    num = get_num_input(message, invalidMessage, 1, max_input, False)
+
+    return YT_BASEURL + get_video_id(results, num)
 
 
 def get_video_id(results: list, index: int) -> str:
@@ -542,3 +548,23 @@ def get_dir_path(message: str) -> str:
         mandatory=True,
         vi_mode=True,
     ).execute()
+
+
+def is_video_extension(ext: str) -> bool:
+    return ext.lower() in {
+        ".mp4",
+        ".mkv",
+        ".mov",
+        ".webm",
+        ".m4v",
+        ".mpeg",
+        ".mpg",
+    }
+
+
+def is_audio_extension(ext: str) -> bool:
+    return ext.lower() in {
+        ".mp3",
+        ".m4a",
+        ".wav",
+    }
