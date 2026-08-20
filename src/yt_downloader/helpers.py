@@ -1,3 +1,4 @@
+import ipaddress
 import os
 import argparse
 from InquirerPy import inquirer
@@ -6,7 +7,7 @@ from yt_downloader.youtube import YTClient
 import yt_downloader.downloader as downloader
 
 
-def parse_args() -> tuple[list[str], downloader.Options]:
+def parse_args() -> argparse.Namespace:
     """
     Function get_args gets arguments from command line
     """
@@ -116,7 +117,7 @@ def parse_args() -> tuple[list[str], downloader.Options]:
         "--client",
         action="store_true",
         help="Run in client mode and send download jobs to a server over HTTP",
-        dest="server_mode",
+        dest="client_mode",
     )
     argparser.add_argument(
         "-P",
@@ -132,17 +133,16 @@ def parse_args() -> tuple[list[str], downloader.Options]:
         type=str,
         help="The server address to listen on in server mode or connect to in client mode.",
         dest="address",
-        default="localhost",
     )
 
     args = argparser.parse_args()
 
-    return get_urls_and_opts_from_arguments(args)
+    return args
 
 
-def get_urls_and_opts_from_arguments(
+def get_opts_from_arguments(
     options: argparse.Namespace,
-) -> tuple[list[str], downloader.Options]:
+) -> downloader.Options:
     urls: list[str]
     yt_client = YTClient()
 
@@ -185,10 +185,8 @@ def get_urls_and_opts_from_arguments(
     opts.download_both = options.both
     opts.verbose = options.verbose
 
-    opts.port = options.port
-    opts.address = options.address
-
-    return urls, opts
+    opts.urls = urls
+    return opts
 
 
 def get_urls_from_file(file_path: str) -> list[str]:
@@ -297,3 +295,14 @@ def is_audio_extension(ext: str) -> bool:
         ".m4a",
         ".wav",
     }
+
+
+def join_host_port(host: str, port: int) -> str:
+    try:
+        addr = ipaddress.ip_address(host)
+        if addr.version == 6:
+            return f"[{host}]:{port}"
+    except ValueError:
+        pass
+
+    return f"{host}:{port}"

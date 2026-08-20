@@ -5,7 +5,7 @@ import shutil
 import pathlib
 import tempfile
 import yt_downloader.helpers as helpers
-from dataclasses import dataclass
+from pydantic import BaseModel, Field
 
 
 class ContentType(Enum):
@@ -14,8 +14,8 @@ class ContentType(Enum):
     BOTH = 3
 
 
-@dataclass
-class Options:
+class Options(BaseModel):
+    urls: list[str] = Field(default_factory=list)
     format: str = ""
     music_dir: str = ""
     video_dir: str = ""
@@ -25,15 +25,12 @@ class Options:
     download_audio: bool = False
     download_both: bool = True
     verbose: bool = False
-    port: int = 2210
-    address: str = "localhost"
 
 
 class Downloader:
-    temp_path = pathlib.Path(tempfile.gettempdir())
-    temp_dir: pathlib.Path
-
     def __init__(self, temp_dir="ydl"):
+        self.temp_path = pathlib.Path(tempfile.gettempdir())
+
         temp = self.temp_path / temp_dir
         if temp.exists():
             shutil.rmtree(temp)
@@ -41,7 +38,7 @@ class Downloader:
 
         self.temp_dir = temp
 
-    def download_content(self, urls: list[str], opts: Options):
+    def download_content(self, opts: Options):
         """
         Function download_content downloads the youtube video pointed to by the urls given using yt_dlp module
 
@@ -74,7 +71,7 @@ class Downloader:
         ydl_opts = self.get_ytdlp_opts(opts, content_type)
 
         print("\nDownloading Content......................")
-        self.download_with_ytdlp(urls, ydl_opts)
+        self.download_with_ytdlp(opts.urls, ydl_opts)
         self.save_files_to_correct_path(content_type, music_path, video_path)
 
     def download_with_ytdlp(self, urls: list[str], ydl_opts: dict):

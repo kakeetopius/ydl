@@ -1,15 +1,17 @@
 [project]
 name = "yt-downloader"
-version = "0.2.30"
+version = "0.2.41"
 description = "Simpler interface to the yt-dlp video downloader."
 authors = [
     { name = "kakeetopius", email = "pius.kakeeto@strathmore.edu" }
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "fastapi>=0.141.1",
     "inquirerpy>=0.3.4",
     "prettytable>=3.17.0",
     "requests>=2.32.5",
+    "uvicorn>=0.52.4",
     "yt-dlp[default]>=2025.12.8",
 ]
 
