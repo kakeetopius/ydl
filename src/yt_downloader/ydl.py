@@ -253,8 +253,11 @@ def download_content(urls: list[str], opts: dict):
 def download_with_ytdlp(urls: list[str], ydl_opts: dict):
     YDL_TMP_DIR.mkdir(exist_ok=True, parents=True)
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download(urls)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download(urls)
+    except KeyboardInterrupt:
+        return
 
 
 def list_ytdlp_formats(urls: list[str]):
