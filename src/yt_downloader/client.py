@@ -1,7 +1,7 @@
 import json
+import requests
 from dataclasses import dataclass
 from yt_downloader.downloader import Options as DLOptions
-import requests
 from yt_downloader.helpers import join_host_port
 
 

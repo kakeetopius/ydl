@@ -37,20 +37,21 @@ class YTClient:
             print("If persistent errors try using direct direct links instead")
             exit(-1)
 
-    def show_ytresults_and_get_url(self, results: list) -> str:
+    def show_ytresults_and_get_url(self, results: dict) -> str:
         """
         Function prints out information using prettytable about the returned youtube resulted
             and then queries the user which video to download
         Returns:
         The url for the youtube video to download
         """
+        items = results["items"]
         i = 1
         table = prettytable.PrettyTable()
         table.field_names = ["Index", "Title", "Channel"]
 
-        for result in results:
-            title = result["snippet"]["title"]
-            channel = result["snippet"]["channelTitle"]
+        for item in items:
+            title = item["snippet"]["title"]
+            channel = item["snippet"]["channelTitle"]
 
             if len(title) > self.print_max_len:
                 title = helpers.truncate(title, self.print_max_len)
@@ -68,7 +69,7 @@ class YTClient:
 
         num = helpers.get_num_input(message, invalidMessage, 1, max_input, False)
 
-        return self.yt_baseurl + YTClient.get_video_id(results, num)
+        return self.yt_baseurl + YTClient.get_video_id(items, num)
 
     @staticmethod
     def get_video_id(results: list, index: int) -> str:

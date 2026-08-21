@@ -1,10 +1,10 @@
 import ipaddress
 import os
 import argparse
+import yt_downloader.downloader as downloader
 from InquirerPy import inquirer
 from InquirerPy.validator import EmptyInputValidator, PathValidator
 from yt_downloader.youtube import YTClient
-import yt_downloader.downloader as downloader
 
 
 def parse_args() -> argparse.Namespace:
@@ -151,7 +151,7 @@ def parse_args() -> argparse.Namespace:
 def get_opts_from_arguments(
     options: argparse.Namespace,
 ) -> downloader.Options:
-    urls: list[str]
+    urls: list[str] = list()
     yt_client = YTClient()
 
     if options.search:
@@ -161,24 +161,23 @@ def get_opts_from_arguments(
                 "yt_api environment variable is not set. please set before continuing"
             )
         results = yt_client.query_youtube(options.search, options.num_results, api_key)
-        urls = [yt_client.show_ytresults_and_get_url(results["items"])]
+        urls.append(yt_client.show_ytresults_and_get_url(results))
     elif options.url:
-        urls = [options.url]
+        urls.append(options.url)
     elif options.url_file:
-        urls = get_urls_from_file(options.url_file)
+        urls.extend(get_urls_from_file(options.url_file))
     elif options.kwfile:
         api_key = os.getenv(yt_client.api_key_name)
         if not api_key:
             raise RuntimeError(
                 "yt_api environment variable is not set. please set before continuing"
             )
-        urls = get_urls_from_keyword_file(options.kwfile, api_key)
+        urls.extend(get_urls_from_keyword_file(options.kwfile, api_key))
     else:
         if not options.server_mode:
             print("Please provide a url or keywords to query youtube with.")
             print("Use ydl -h for more information")
             exit(-1)
-        urls = list()
 
     opts = downloader.Options()
     if options.format:
@@ -235,6 +234,8 @@ def get_urls_from_keyword_file(file_path: str, api_key: str) -> list[str]:
     for keyword in keywords:
         keyword = " ".join(keyword.split())
         results = yt_client.query_youtube(keyword, 1, api_key)["items"]
+        if len(results) == 0:
+            continue
         url = yt_client.get_full_url_from_video_id(results[0]["id"]["videoId"])
         urls.append(url)
 

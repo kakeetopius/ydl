@@ -1,10 +1,10 @@
 import re
 import yt_dlp
-from enum import Enum
 import shutil
 import pathlib
 import tempfile
 import yt_downloader.helpers as helpers
+from enum import Enum
 from pydantic import BaseModel, Field
 
 
@@ -77,11 +77,8 @@ class Downloader:
         self.save_files_to_correct_path(content_type, music_path, video_path)
 
     def download_with_ytdlp(self, urls: list[str], ydl_opts: dict):
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download(urls)
-        except KeyboardInterrupt:
-            return
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download(urls)
 
     def list_ytdlp_formats(self, urls: list[str]):
         yt_dlp_opts = {"listformats": True}
