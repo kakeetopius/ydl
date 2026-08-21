@@ -39,10 +39,18 @@ def parse_args() -> argparse.Namespace:
         dest="url_file",
     )
     argparser.add_argument(
+        "-r",
+        "--resolution",
+        type=str,
+        help="Desired video quality eg 420p, 720p, 1080p etc",
+        default="",
+        dest="resolution",
+    )
+    argparser.add_argument(
         "-f",
         "--format",
         type=str,
-        help="The yt-dlp format to use instead of the defaults (video only)",
+        help="Raw yt-dlp format to use. Overrides the resolution setting (video only).",
         dest="format",
     )
     argparser.add_argument(
@@ -166,9 +174,11 @@ def get_opts_from_arguments(
             )
         urls = get_urls_from_keyword_file(options.kwfile, api_key)
     else:
-        print("Please provide a url or keywords to query youtube with.")
-        print("Use ydl -h for more information")
-        exit(-1)
+        if not options.server_mode:
+            print("Please provide a url or keywords to query youtube with.")
+            print("Use ydl -h for more information")
+            exit(-1)
+        urls = list()
 
     opts = downloader.Options()
     if options.format:
@@ -184,6 +194,7 @@ def get_opts_from_arguments(
     opts.download_audio = options.audio
     opts.download_both = options.both
     opts.verbose = options.verbose
+    opts.resolution = options.resolution
 
     opts.urls = urls
     return opts

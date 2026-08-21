@@ -17,6 +17,7 @@ class ContentType(Enum):
 class Options(BaseModel):
     urls: list[str] = Field(default_factory=list)
     format: str = ""
+    resolution: str = ""
     music_dir: str = ""
     video_dir: str = ""
     download_playlist: bool = False
@@ -25,6 +26,7 @@ class Options(BaseModel):
     download_audio: bool = False
     download_both: bool = True
     verbose: bool = False
+    server_mode: bool = False
 
 
 class Downloader:
@@ -123,6 +125,10 @@ class Downloader:
         elif opts.download_both:
             return ContentType.BOTH
 
+        if opts.resolution:
+            # if resolution is given, assume user wants to download video
+            return ContentType.VIDEO
+
         video_dir_given = opts.video_dir != ""
         music_dir_given = opts.music_dir != ""
 
@@ -132,6 +138,10 @@ class Downloader:
             return ContentType.VIDEO
         elif music_dir_given:
             return ContentType.AUDIO
+
+        if opts.server_mode:
+            # to avoid prompting in servermode
+            return ContentType.BOTH
 
         result = helpers.get_terminal_selection(
             message="Select Content Type to download:",
@@ -149,8 +159,13 @@ class Downloader:
         HOME = pathlib.Path.home()
         DEFAULT_MUSIC_PATH = HOME / "Music"
 
-        if opts.music_dir != "":
-            music_path = opts.music_dir
+        music_format = "bestaudio"
+
+        if opts.music_dir:
+            return (music_format, opts.music_dir)
+        elif opts.server_mode:
+            # to avoid prompting in server_mode
+            return (music_format, str(DEFAULT_MUSIC_PATH))
         else:
             # if music directory was not provided by user prompt the user for one or use default.
             m_path = helpers.get_dir_path("Enter music path(Leave blank for default): ")
@@ -158,7 +173,6 @@ class Downloader:
                 music_path = m_path
             else:
                 music_path = str(DEFAULT_MUSIC_PATH)
-        music_format = "bestaudio"
 
         return (music_format, music_path)
 
@@ -166,8 +180,13 @@ class Downloader:
         HOME = pathlib.Path.home()
         DEFAULT_VIDEO_PATH = HOME / "Videos"
 
-        if opts.video_dir != "":
+        default_resolution = "1080"
+
+        if opts.video_dir:
             video_path = opts.video_dir
+        elif opts.server_mode:
+            # to avoid prompting in server_mode
+            video_path = str(DEFAULT_VIDEO_PATH)
         else:
             # if video directory was not provided by user prompt the user for one or use default.
             v_path = helpers.get_dir_path("Enter video path(Leave blank for default): ")
@@ -176,14 +195,22 @@ class Downloader:
             else:
                 video_path = str(DEFAULT_VIDEO_PATH)
 
-        if opts.format == "":
-            formats = ["2160", "4320", "1440", "1080", "720", "480"]
-            format = helpers.get_terminal_selection(
-                "Choose format to download", formats, "720"
-            )
-            video_format = f"bestaudio+bestvideo[ext=mp4][height<={format}]/best[ext=m4a][height<={format}]"
-        else:
+        if opts.format:
             video_format = opts.format
+        elif opts.resolution:
+            opts.resolution.removesuffix("p")
+            video_format = f"bestaudio+bestvideo[ext=mp4][height<={opts.resolution}]/best[ext=m4a][height<={opts.resolution}]"
+        elif opts.server_mode:
+            # to avoid prompting in server_mode
+            video_format = str(
+                f"bestaudio+bestvideo[ext=mp4][height<={default_resolution}]/best[ext=m4a][height<={default_resolution}]"
+            )
+        else:
+            resolutions = ["2160", "4320", "1440", "1080", "720", "480"]
+            resolution = helpers.get_terminal_selection(
+                "Choose format to download", resolutions, "720"
+            )
+            video_format = f"bestaudio+bestvideo[ext=mp4][height<={resolution}]/best[ext=m4a][height<={resolution}]"
 
         return (video_format, video_path)
 
