@@ -19,6 +19,7 @@ class Job:
     download_options: DLOptions
     created_at: datetime
     finished_at: datetime | None = None
+    retries: int = 0
 
 
 class Status(str, Enum):
@@ -35,8 +36,9 @@ class Server:
         port: int = 2210,
         music_dir: str = "",
         video_dir: str = "",
-        retry_timeout: int = 600,
-        cleanup_timeout: int = 600,
+        cleanup_timeout: int = 300,
+        retry_timeout: int = 300,
+        max_retries: int = 5,
     ):
         if not address:
             address = "0.0.0.0"
@@ -48,8 +50,9 @@ class Server:
         self.jobs: dict[UUID, Job] = dict()
         self.music_dir = music_dir
         self.video_dir = video_dir
-        self.retry_timeout = retry_timeout
         self.cleanup_timeout = cleanup_timeout
+        self.retry_timeout = retry_timeout
+        self.max_retries = max_retries
 
         self.app = FastAPI(lifespan=self.lifespan)
 
@@ -149,8 +152,9 @@ class Server:
     async def retry_jobs(self):
         while True:
             for job in self.jobs.values():
-                if job.status == Status.FAILED:
+                if job.status == Status.FAILED and job.retries <= self.max_retries:
                     job.status = Status.QUEUED
+                    job.retries += 1
                     self.queue.put(job)
 
             await asyncio.sleep(self.retry_timeout)
