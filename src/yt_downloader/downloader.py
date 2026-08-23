@@ -32,13 +32,15 @@ class Options(BaseModel):
 class Downloader:
     def __init__(self, temp_dir="ydl"):
         self.temp_path = pathlib.Path(tempfile.gettempdir())
+        self.temp_dir: pathlib.Path = self.temp_path / temp_dir
+        # if present indicates that some download before was cancelled.
+        self.cancelled_file = self.temp_dir / "cancelled"
 
-        temp = self.temp_path / temp_dir
-        if temp.exists():
-            shutil.rmtree(temp)
-        temp.mkdir(exist_ok=True, parents=True)
-
-        self.temp_dir = temp
+        if not self.cancelled_file.exists() and self.temp_dir.exists():
+            # only clear the temp dir if the cancelled_file does not exist
+            # if cancelled_file exists nothing is removed such that yt-dlp can continue where it left off before being cancelled.
+            shutil.rmtree(self.temp_dir)
+        self.temp_dir.mkdir(exist_ok=True, parents=True)
 
     def download_content(self, opts: Options):
         """
@@ -75,10 +77,18 @@ class Downloader:
         print("\nDownloading Content......................")
         self.download_with_ytdlp(opts.urls, ydl_opts)
         self.save_files_to_correct_path(content_type, music_path, video_path)
+        # delete cancelled_file if present to indicate we finished succesfully
+        self.cancelled_file.unlink(missing_ok=True)
 
     def download_with_ytdlp(self, urls: list[str], ydl_opts: dict):
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(urls)
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download(urls)
+        except Exception as e:
+            # make the cancelled_file to indicate we were cancelled such that if the same content is downloaded again
+            # yt-dlp can continue  where it left off.
+            self.cancelled_file.touch(exist_ok=True)
+            raise e
 
     def list_ytdlp_formats(self, urls: list[str]):
         yt_dlp_opts = {"listformats": True}
