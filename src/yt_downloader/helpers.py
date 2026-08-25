@@ -2,15 +2,26 @@ import ipaddress
 import os
 import argparse
 import yt_downloader.downloader as downloader
+from platformdirs import user_config_dir
+from pathlib import Path
+from dynaconf import Dynaconf
 from InquirerPy import inquirer
 from InquirerPy.validator import EmptyInputValidator, PathValidator
 from yt_downloader.youtube import YTClient
 
+CONFIG_FILE = Path(user_config_dir(appname="ydl", ensure_exists=True)) / "ydl.toml"
 
-def parse_args() -> argparse.Namespace:
+
+def get_args_and_settings() -> tuple[argparse.Namespace, Dynaconf]:
     """
-    Function get_args gets arguments from command line
+    Function get_args_and_settings gets command line arguments and settings.
     """
+
+    settings = Dynaconf(
+        envvar_prefix="YDL",
+        settings_files=[str(CONFIG_FILE)],
+    )
+
     description = "A python script to search youtube for any video with keywords and then download audio or video."
 
     argparser = argparse.ArgumentParser(description=description)
@@ -133,7 +144,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         help="The server port to listen on in server mode or connect to in client mode.",
         dest="port",
-        default=2210,
+        default=settings.server.port,
     )
     argparser.add_argument(
         "-a",
@@ -141,11 +152,23 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="The server address to listen on in server mode or connect to in client mode.",
         dest="address",
+        default=settings.server.address,
     )
 
     args = argparser.parse_args()
 
-    return args
+    settings.update(
+        {
+            "server": {
+                "address": args.address,
+                "port": args.port,
+            }
+        }
+    )
+    print(settings.server.address)
+    print(settings.server.port)
+
+    return args, settings
 
 
 def get_opts_from_arguments(
