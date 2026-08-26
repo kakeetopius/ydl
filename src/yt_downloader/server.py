@@ -2,6 +2,7 @@ import threading
 import uvicorn
 import asyncio
 import pika
+import pika.exceptions
 import sys
 from contextlib import asynccontextmanager
 from yt_downloader.downloader import Downloader
@@ -12,6 +13,7 @@ from uuid import UUID, uuid4
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime, timedelta
+from pydantic import ValidationError
 
 
 @dataclass
@@ -83,7 +85,7 @@ class Server:
             self.rbmq_channel = channel
         except Exception as e:
             print(repr(e))
-            sys.exit(1)
+            exit(1)
 
     def run(self):
         threading.Thread(target=self.start_worker, daemon=True).start()
@@ -140,28 +142,38 @@ class Server:
         raise HTTPException(status_code=404, detail=f"job with id {id} not found")
 
     def get_jobs_from_rabbit_mq(self):
+        while True:
+            try:
+                self.rbmq_channel.queue_declare(
+                    queue=self.rbmq_queue_name,
+                    durable=True,
+                    arguments={"x-queue-type": "quorum"},
+                )
+
+                self.rbmq_channel.basic_consume(
+                    queue=self.rbmq_queue_name,
+                    on_message_callback=self.pika_callback,
+                    auto_ack=True,
+                )
+
+                self.rbmq_channel.start_consuming()
+
+            except (
+                pika.exceptions.ChannelClosed,
+                pika.exceptions.ChannelWrongStateError,
+            ):
+                self.rbmq_channel = self.get_rabbitmq_connection().channel()
+            except Exception as e:
+                print(repr(e))
+                self.rbmq_channel.close()
+                exit(1)
+
+    def pika_callback(self, _, __, ___, body: bytes):
         try:
-            self.rbmq_channel.queue_declare(
-                queue=self.rbmq_queue_name,
-                durable=True,
-                arguments={"x-queue-type": "quorum"},
-            )
-
-            self.rbmq_channel.basic_consume(
-                queue=self.rbmq_queue_name,
-                on_message_callback=self.pika_callback,
-                auto_ack=True,
-            )
-
-            self.rbmq_channel.start_consuming()
-        except Exception as e:
-            print(repr(e))
-            self.rbmq_channel.close()
-            sys.exit(1)
-
-    def pika_callback(self, ch, method, properties, body: bytes):
-        job = DLOptions.model_validate_json(body.decode())
-        self.download(job)
+            job = DLOptions.model_validate_json(body.decode())
+            self.download(job)
+        except ValidationError:
+            print("Recieved invalid job from rabbitmq: ", body)
 
     def get_jobs(self, status: Status | None = None):
         if status:
