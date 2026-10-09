@@ -139,11 +139,11 @@ def get_args_and_settings() -> tuple[argparse.Namespace, Dynaconf]:
         dest="client_mode",
     )
     argparser.add_argument(
-        "--no-queue",
+        "--queue",
         action="store_true",
-        help="Send or receive download requests directly to the server or from the client, not via a rabbitmq queue",
-        dest="noqueue",
-        default=settings.get("server.noqueue"),
+        help="Send or receive download requests also via a rabbitmq queue.",
+        dest="queue",
+        default=settings.get("server.queue"),
     )
     argparser.add_argument(
         "-P",
@@ -169,7 +169,7 @@ def get_args_and_settings() -> tuple[argparse.Namespace, Dynaconf]:
             "server": {
                 "address": args.address,
                 "port": args.port,
-                "noqueue": args.noqueue,
+                "queue": args.queue,
             }
         }
     )

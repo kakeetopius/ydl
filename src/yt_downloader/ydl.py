@@ -13,9 +13,9 @@ def start():
         server = Server(
             music_dir=opts.music_dir,
             video_dir=opts.video_dir,
-            address=settings.get("server.address", "localhost"),
+            address=settings.get("server.address", "0.0.0.0"),
             port=settings.get("server.port", 2210),
-            noqueue=settings.get("server.noqueue", False),
+            queue_via_rbmq=settings.get("server.queue", False),
             rbmq_address=settings.get("rabbitmq.address", "localhost"),
             rbmq_port=settings.get("rabbitmq.port", 5672),
             rbmq_vhost=settings.get("rabbitmq.vhost", ""),
@@ -30,9 +30,9 @@ def start():
 
     if args.client_mode:
         client = Client(
-            server_address=settings.get("server.address", "localhost"),
+            server_address=settings.get("server.address", "0.0.0.0"),
             server_port=settings.get("server.port", 2210),
-            noqueue=settings.get("server.noqueue", False),
+            queue_via_rbmq=settings.get("server.queue", False),
             rbmq_address=settings.get("rabbitmq.address", "localhost"),
             rbmq_port=settings.get("rabbitmq.port", 5672),
             rbmq_vhost=settings.get("rabbitmq.vhost", ""),

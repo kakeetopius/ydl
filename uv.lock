@@ -498,7 +498,7 @@ wheels = [
 
 [[package]]
 name = "yt-downloader"
-version = "0.2.81"
+version = "0.2.84"
 source = { editable = "." }
 dependencies = [
     { name = "dynaconf" },

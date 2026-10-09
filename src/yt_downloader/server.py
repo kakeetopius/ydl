@@ -43,7 +43,7 @@ class Server:
         cleanup_timeout: int = 300,
         retry_timeout: int = 300,
         max_retries: int = 5,
-        noqueue: bool = False,
+        queue_via_rbmq: bool = False,
         rbmq_address: str = "localhost",
         rbmq_port: int = 5672,
         rbmq_vhost: str = "",
@@ -64,7 +64,9 @@ class Server:
         self.retry_timeout = retry_timeout
         self.max_retries = max_retries
 
-        self.noqueue = noqueue
+        self.queue_via_rbmq = queue_via_rbmq
+        self.rbmq_failed = False
+        self.rbmq_retries = 0
         self.rbmq_address = rbmq_address
         self.rbmq_port = rbmq_port
         self.rbmq_vhost = rbmq_vhost
@@ -77,19 +79,19 @@ class Server:
         self.app.get("/jobs")(self.get_jobs)
         self.app.get("/job/{id}")(self.get_job_status)
 
-        if noqueue:
+        if not queue_via_rbmq:
             return
         try:
             con = self.get_rabbitmq_connection()
             channel = con.channel()
             self.rbmq_channel = channel
         except Exception as e:
-            print(repr(e))
+            print("Error connecting to rabbitmq queue: ", repr(e))
             exit(1)
 
     def run(self):
         threading.Thread(target=self.start_worker, daemon=True).start()
-        if not self.noqueue:
+        if self.queue_via_rbmq:
             threading.Thread(target=self.get_jobs_from_rabbit_mq, daemon=True).start()
         uvicorn.run(
             self.app,
@@ -160,13 +162,19 @@ class Server:
 
             except (
                 pika.exceptions.ChannelClosed,
-                pika.exceptions.ChannelWrongStateError,
+                pika.exceptions.AMQPHeartbeatTimeout,
             ):
-                self.rbmq_channel = self.get_rabbitmq_connection().channel()
+                print("Got heartbeat timeout error.\nTrying to create new connection")
+                try:
+                    self.rbmq_channel = self.get_rabbitmq_connection().channel()
+                except Exception as e:
+                    print("Error creating new connection to rabbitmq queue: ", repr(e))
+                    self.rbmq_failed = True
+                    return
             except Exception as e:
-                print(repr(e))
-                self.rbmq_channel.close()
-                exit(1)
+                print("Error with the rabbitmq queue: ", repr(e))
+                self.rbmq_failed = True
+                return
 
     def pika_callback(self, _, __, ___, body: bytes):
         try:
@@ -215,11 +223,29 @@ class Server:
 
     async def retry_jobs(self):
         while True:
+            # retry failed jobs.
             for job in self.jobs.values():
                 if job.status == Status.FAILED and job.retries <= self.max_retries:
                     job.status = Status.QUEUED
                     job.retries += 1
                     self.queue.put(job)
+
+            # check if connection to rbmq queue failed and if so try to rectify.
+            if self.queue_via_rbmq and self.rbmq_failed:
+                self.rbmq_retries += 1
+                try:
+                    print("Retrying connection to rabbitmq queue.")
+                    self.rbmq_channel = self.get_rabbitmq_connection().channel()
+                    self.rbmq_failed = False
+                    print("Connection to rabbitmq succeeded.")
+
+                    # restart the rbmq worker if connection succeeded
+                    threading.Thread(
+                        target=self.get_jobs_from_rabbit_mq, daemon=True
+                    ).start()
+                except Exception as e:
+                    print("Error creating new connection to rabbitmq queue: ", repr(e))
+                    self.rbmq_failed = True
 
             await asyncio.sleep(self.retry_timeout)
 

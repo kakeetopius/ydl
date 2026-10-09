@@ -11,7 +11,7 @@ class Client:
         self,
         server_address: str = "localhost",
         server_port: int = 2210,
-        noqueue: bool = False,
+        queue_via_rbmq: bool = False,
         rbmq_address: str = "localhost",
         rbmq_port: int = 5672,
         rbmq_vhost: str = "",
@@ -26,7 +26,7 @@ class Client:
         self.download_ep = "/download"
         self.address: str = server_address
         self.port = server_port
-        self.noqueue = noqueue
+        self.queue_via_rbmq = queue_via_rbmq
 
         self.rbmq_address = rbmq_address
         self.rbmq_port = rbmq_port
@@ -67,10 +67,10 @@ class Client:
             con.close()
             print("Successfully sent download request to rabbitmq queue.")
         except Exception as e:
-            print(repr(e))
+            print("Error connecting to rabbitmq queue: ", repr(e))
 
     def send_download_request(self, opts: DLOptions):
-        if not self.noqueue:
+        if self.queue_via_rbmq:
             return self.send_download_request_to_rbmqueue(opts)
 
         resp = requests.post(
