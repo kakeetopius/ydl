@@ -28,6 +28,23 @@ class Options(BaseModel):
     verbose: bool = False
     server_mode: bool = False
 
+    def split(self) -> list[Options]:
+        """
+        split splits an Options object containing multiple urls into a list of Options objects containing one url each
+        but with all other options remaining the same.
+        """
+        if len(self.urls) <= 1:
+            return [self]
+
+        split_opts: list[Options] = list()
+
+        for url in self.urls:
+            opt = self.model_copy()
+            opt.urls = [url]
+            split_opts.append(opt)
+
+        return split_opts
+
 
 class Downloader:
     def __init__(self, temp_dir="ydl"):

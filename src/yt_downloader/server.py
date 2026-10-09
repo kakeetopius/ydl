@@ -122,16 +122,22 @@ class Server:
         if not req.music_dir and self.music_dir:
             req.music_dir = self.music_dir
 
-        job = Job(
-            id=uuid4(),
-            status=Status.QUEUED,
-            download_options=req,
-            created_at=datetime.now(),
-        )
-        self.jobs[job.id] = job
-        self.queue.put(job)
+        # this splits the req into multiple DLOptions with each DLOption containing exactly one url to use when downloading so each url gets its own job.
+        requests = req.split()
+        new_jobs = list()
 
-        return {"job_id": job.id, "status": Status.QUEUED}
+        for request in requests:
+            job = Job(
+                id=uuid4(),
+                status=Status.QUEUED,
+                download_options=request,
+                created_at=datetime.now(),
+            )
+            self.jobs[job.id] = job
+            self.queue.put(job)
+            new_jobs.append({"job_id": job.id})
+
+        return new_jobs
 
     def get_job_status(self, id: UUID):
         if id in self.jobs:
