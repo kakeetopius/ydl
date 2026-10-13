@@ -204,9 +204,17 @@ class Server:
             print("Recieved invalid job from rabbitmq: ", body)
 
     def get_jobs(self, status: Status | None = None):
+        jobs: list[Job]
         if status:
-            return self.get_jobs_of_status(status)
-        return list(self.jobs.values())
+            jobs = self.get_jobs_of_status(status)
+        else:
+            jobs = list(self.jobs.values())
+
+        return {
+            "jobs": jobs,
+            "count": len(jobs),
+            "timestamp": datetime.now(),
+        }
 
     def get_jobs_of_status(self, status: Status) -> list[Job]:
         return [job for job in self.jobs.values() if job.status == status]
