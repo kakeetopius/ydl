@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime, timedelta
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel
 
 
 @dataclass
@@ -23,6 +23,7 @@ class Job:
     download_options: DLOptions
     created_at: datetime
     finished_at: datetime | None = None
+    max_retries: int = 5
     retries: int = 0
 
 
@@ -31,6 +32,10 @@ class Status(str, Enum):
     DOWNLOADING = "downloading"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class RetryOptions(BaseModel):
+    tries: int
 
 
 class Server:
@@ -78,6 +83,7 @@ class Server:
         self.app.post("/download")(self.download)
         self.app.get("/jobs")(self.get_jobs)
         self.app.get("/job/{id}")(self.get_job_status)
+        self.app.post("/retry/{id}")(self.retry_endpoint)
 
         if not queue_via_rbmq:
             return
@@ -132,12 +138,20 @@ class Server:
                 status=Status.QUEUED,
                 download_options=request,
                 created_at=datetime.now(),
+                max_retries=self.max_retries,
             )
             self.jobs[job.id] = job
             self.queue.put(job)
             new_jobs.append({"job_id": job.id})
 
         return new_jobs
+
+    def retry_endpoint(self, id: UUID, req: RetryOptions):
+        if id not in self.jobs:
+            raise HTTPException(status_code=404, detail=f"job with id {id} not found")
+
+        self.jobs[id].max_retries += req.tries
+        return {"status": "success"}
 
     def get_job_status(self, id: UUID):
         if id in self.jobs:
@@ -231,7 +245,7 @@ class Server:
         while True:
             # retry failed jobs.
             for job in self.jobs.values():
-                if job.status == Status.FAILED and job.retries <= self.max_retries:
+                if job.status == Status.FAILED and job.retries <= job.max_retries:
                     job.status = Status.QUEUED
                     job.retries += 1
                     self.queue.put(job)
