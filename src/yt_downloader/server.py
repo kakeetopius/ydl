@@ -41,7 +41,7 @@ class RetryOptions(BaseModel):
 class Server:
     def __init__(
         self,
-        address: str = "0.0.0.0",
+        address: str = "localhost",
         port: int = 2210,
         music_dir: str = "",
         video_dir: str = "",
@@ -55,9 +55,6 @@ class Server:
         rbmq_username: str = "",
         rbmq_password: str = "",
     ):
-        if not address:
-            address = "0.0.0.0"
-
         self.address: str = address
         self.port = port
         self.queue: Queue[Job] = Queue()
@@ -253,7 +250,7 @@ class Server:
         while True:
             # retry failed jobs.
             for job in self.jobs.values():
-                if job.status == Status.FAILED and job.retries <= job.max_retries:
+                if job.status == Status.FAILED and job.retries < job.max_retries:
                     job.status = Status.QUEUED
                     job.retries += 1
                     self.queue.put(job)
